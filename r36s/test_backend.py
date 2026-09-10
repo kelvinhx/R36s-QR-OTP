@@ -292,6 +292,116 @@ def run_audit():
             assert_test("Segurança: Rejeição na divergência de Hash SHA-256", e.code == 400)
 
         # ----------------------------------------------------------------------
+        # 3.9 RESTART TEST: Upload Resumível com Parada do Servidor e Novo Token
+        # ----------------------------------------------------------------------
+        print("\n>> [FASE 3.9] Auditoria de Reinicialização de Servidor (Restart Real com Token B)...")
+        # Iniciar upload no Servidor A (Token A)
+        restart_filename = "persistent_restart_payload.bin"
+        restart_payload = os.urandom(64 * 1024)  # 64 KB
+        restart_expected_sha = hashlib.sha256(restart_payload).hexdigest()
+        restart_chunk_size = 32 * 1024  # 32 KB
+
+        init_restart_req = urllib.request.Request(f"{base_url}/api/upload/init", method="POST")
+        init_restart_req.add_header("X-Auth-Token", test_token)
+        init_restart_req.add_header("Content-Type", "application/json")
+        init_restart_body = json.dumps({
+            "filename": restart_filename,
+            "target_dir": created,
+            "total_size": len(restart_payload),
+            "expected_hash": restart_expected_sha
+        }).encode()
+        with urllib.request.urlopen(init_restart_req, data=init_restart_body) as resp:
+            r_init_res = json.loads(resp.read().decode())
+            r_upload_id = r_init_res.get("upload_id")
+            r_resume_token = r_init_res.get("resume_token")
+
+        # Enviar chunk 0 no Servidor A com Token A (usando X-Resume-Token)
+        c0_restart_req = urllib.request.Request(f"{base_url}/api/upload/chunk", method="POST")
+        c0_restart_req.add_header("X-Resume-Token", r_resume_token)
+        c0_restart_req.add_header("X-Upload-Id", r_upload_id)
+        c0_restart_req.add_header("X-Chunk-Index", "0")
+        c0_restart_req.add_header("X-Chunk-Offset", "0")
+        c0_restart_req.add_header("Content-Type", "application/octet-stream")
+        with urllib.request.urlopen(c0_restart_req, data=restart_payload[:restart_chunk_size]) as resp:
+            c0_res = json.loads(resp.read().decode())
+            assert_test(
+                "Restart Test (Servidor A): Recepção e persistência do primeiro chunk em disco",
+                c0_res.get("received_bytes") == restart_chunk_size
+            )
+
+        # Interromper Servidor A
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except Exception:
+                proc.kill()
+        time.sleep(0.5)
+
+        # Iniciar Servidor B com Token B completamente NOVO e diferente
+        token_b = secrets.token_hex(16)
+        port_b = test_port  # Reutiliza a porta liberada
+        server_b_cmd = [
+            sys.executable,
+            os.path.realpath("r36s/server.py"),
+            "--port", str(port_b),
+            "--token", token_b,
+            "--ui", os.path.realpath("r36s/ui.html"),
+            "--roots", test_dir
+        ]
+        proc = subprocess.Popen(server_b_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        time.sleep(1)
+
+        # Atualizar variáveis para que as etapas seguintes usem Servidor B e Token B
+        test_token = token_b
+        base_url = f"http://127.0.0.1:{port_b}"
+
+        # Servidor B deve rejeitar token antigo Token A
+        old_token_req = urllib.request.Request(f"{base_url}/api/status")
+        old_token_req.add_header("X-Auth-Token", "audit_token_test_12345")
+        try:
+            urllib.request.urlopen(old_token_req)
+            assert_test("Restart Test (Servidor B): Rejeição do token antigo do Servidor A (401)", False)
+        except urllib.error.HTTPError as e:
+            assert_test("Restart Test (Servidor B): Rejeição do token antigo do Servidor A (401)", e.code == 401)
+
+        # Servidor B aceita Token B para status
+        new_token_req = urllib.request.Request(f"{base_url}/api/status")
+        new_token_req.add_header("X-Auth-Token", token_b)
+        with urllib.request.urlopen(new_token_req) as resp:
+            data_b = json.loads(resp.read().decode())
+            assert_test("Restart Test (Servidor B): Status HTTP 200 ativo com Token B", data_b.get("success") is True)
+
+        # Servidor B recupera a sessão do disco com o X-Resume-Token emitido anteriormente
+        c1_restart_req = urllib.request.Request(f"{base_url}/api/upload/chunk", method="POST")
+        c1_restart_req.add_header("X-Resume-Token", r_resume_token)
+        c1_restart_req.add_header("X-Upload-Id", r_upload_id)
+        c1_restart_req.add_header("X-Chunk-Index", "1")
+        c1_restart_req.add_header("X-Chunk-Offset", str(restart_chunk_size))
+        c1_restart_req.add_header("Content-Type", "application/octet-stream")
+        with urllib.request.urlopen(c1_restart_req, data=restart_payload[restart_chunk_size:]) as resp:
+            c1_b_res = json.loads(resp.read().decode())
+            assert_test(
+                "Restart Test (Servidor B): Retomada do upload via metadata em disco com Token B",
+                c1_b_res.get("received_bytes") == len(restart_payload)
+            )
+
+        # Finalizar upload no Servidor B
+        comp_restart_req = urllib.request.Request(f"{base_url}/api/upload/complete", method="POST")
+        comp_restart_req.add_header("X-Resume-Token", r_resume_token)
+        comp_restart_req.add_header("Content-Type", "application/json")
+        comp_restart_body = json.dumps({"upload_id": r_upload_id}).encode()
+        with urllib.request.urlopen(comp_restart_req, data=comp_restart_body) as resp:
+            comp_b_res = json.loads(resp.read().decode())
+            saved_restart_file = comp_b_res.get("saved_path")
+            with open(saved_restart_file, "rb") as f:
+                saved_b_content = f.read()
+            assert_test(
+                "Restart Test (Servidor B): Finalização atômica e validação de SHA-256 pós-restart",
+                os.path.isfile(saved_restart_file) and hashlib.sha256(saved_b_content).hexdigest() == restart_expected_sha
+            )
+
+        # ----------------------------------------------------------------------
         # 4. DOWNLOAD SEGURO VIA TICKETS DE USO ÚNICO (Sem Token na URL)
         # ----------------------------------------------------------------------
         print("\n>> [FASE 4] Auditoria de Download Seguro e Tickets de Uso Único...")
@@ -479,7 +589,7 @@ def run_audit():
     if failed > 0:
         sys.exit(1)
     else:
-        print("\n>> TODOS OS 24 REQUISITOS FORAM VALIDADOS COM SUCESSO!")
+        print(f"\n>> AUDITORIA FINAL CONCLUÍDA: TODOS OS {passed} TESTES VALIDADOS COM SUCESSO!")
 
 if __name__ == "__main__":
     run_audit()
