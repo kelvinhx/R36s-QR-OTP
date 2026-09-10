@@ -1,0 +1,15 @@
+# gptokeyb mapping for R36S Web File Manager Console
+back = esc
+start = enter
+a = enter
+b = esc
+x = r
+y = space
+up = up
+down = down
+left = left
+right = right
+left_analog_up = up
+left_analog_down = down
+left_analog_left = left
+left_analog_right = right

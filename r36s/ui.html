@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>R36S Web File Manager</title>
+  <style>
+    :root {
+      --bg: #0d0c14;
+      --surface: #171622;
+      --surface-hover: #222033;
+      --border: #2d2b42;
+      --primary: #7c3aed;
+      --primary-hover: #6d28d9;
+      --text: #f4f4f7;
+      --text-muted: #9492a6;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --success: #10b981;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .brand-badge {
+      background: var(--primary);
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 14px;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--surface-hover); }
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Storage bar */
+    .storage-bar {
+      background: #12111b;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+    }
+    .storage-pill {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .storage-pill.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* Toolbar & Breadcrumb */
+    .toolbar {
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    @media (min-width: 640px) {
+      .toolbar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+    .breadcrumbs {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+      font-size: 0.85rem;
+      background: var(--surface);
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .crumb {
+      color: var(--text-muted);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .crumb:hover { color: var(--text); text-decoration: underline; }
+    .crumb.current { color: var(--text); font-weight: 600; cursor: default; }
+    .crumb-sep { color: var(--border); margin: 0 2px; }
+
+    .actions-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .search-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 12px;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      outline: none;
+      flex: 1;
+      min-width: 140px;
+    }
+    .search-box:focus { border-color: var(--primary); }
+
+    /* File List Area */
+    main {
+      flex: 1;
+      padding: 0 16px 24px;
+      display: flex;
+      flex-direction: column;
+    }
+    .file-table-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      flex: 1;
+    }
+    .file-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.88rem;
+    }
+    .file-table th {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 10px 14px;
+      color: var(--text-muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+    .file-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      vertical-align: middle;
+    }
+    .file-table tr:hover td { background: var(--surface-hover); }
+    .file-table tr.selected td { background: rgba(124, 58, 237, 0.15); }
+    .item-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      color: var(--text);
+      text-decoration: none;
+      word-break: break-all;
+    }
+    .item-name:hover { color: #a78bfa; }
+    .item-icon { font-size: 1.2rem; flex-shrink: 0; }
+    .text-muted { color: var(--text-muted); }
+    .checkbox-col { width: 36px; text-align: center; }
+    .action-icons {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+    .icon-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    .icon-btn:hover { color: var(--text); background: var(--surface-hover); }
+
+    /* Progress and Upload Card */
+    .progress-panel {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      left: 16px;
+      max-width: 480px;
+      margin-left: auto;
+      background: #1a1829;
+      border: 1px solid var(--primary);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      border-radius: var(--radius);
+      padding: 14px;
+      display: none;
+      z-index: 100;
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .progress-bar-bg {
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+      height: 8px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .progress-bar-fill {
+      background: var(--primary);
+      height: 100%;
+      width: 0%;
+      transition: width 0.1s ease;
+    }
+    .progress-stats {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Modals */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 200;
+    }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    }
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; }
+    .modal-input {
+      width: 100%;
+      background: #111019;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      outline: none;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    /* Drag & drop overlay */
+    .drop-zone {
+      border: 2px dashed var(--primary);
+      background: rgba(124, 58, 237, 0.08);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <span>🎮 R36S File Manager</span>
+      <span class="brand-badge">LAN</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="btnRefresh" title="Recarregar">🔄 Atualizar</button>
+      <button class="btn btn-danger" id="btnShutdown" title="Encerrar servidor no R36S">⏹ Desconectar</button>
+    </div>
+  </header>
+
+  <!-- Storage Selector -->
+  <div class="storage-bar" id="storageBar">
+    <!-- Storage pills injected via JS -->
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="breadcrumbs" id="breadcrumbBar">
+      <!-- Breadcrumbs injected via JS -->
+    </div>
+    <div class="actions-row">
+      <input type="text" class="search-box" id="searchInput" placeholder="Filtrar nesta pasta...">
+      <input type="file" id="fileInput" multiple style="display: none;">
+      <button class="btn btn-primary" id="btnUpload">📤 Enviar</button>
+      <button class="btn" id="btnNewFolder">📁 Nova Pasta</button>
+      <button class="btn btn-danger" id="btnDeleteSelected" disabled>🗑 Excluir</button>
+      <button class="btn" id="btnDownloadSelected" disabled>⬇ Baixar (ZIP)</button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main>
+    <div class="file-table-container" id="dropTarget">
+      <table class="file-table">
+        <thead>
+          <tr>
+            <th class="checkbox-col"><input type="checkbox" id="selectAll"></th>
+            <th>Nome</th>
+            <th style="width: 100px;">Tamanho</th>
+            <th style="width: 150px;">Modificado</th>
+            <th style="width: 90px; text-align: right;">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="fileTableBody">
+          <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">Carregando diretório...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Progress Floating Panel -->
+  <div class="progress-panel" id="progressPanel">
+    <div class="progress-header">
+      <span id="progressTitle">Enviando arquivo...</span>
+      <span id="progressPercent">0%</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressBarFill"></div>
+    </div>
+    <div class="progress-stats">
+      <span id="progressBytes">0 MB / 0 MB</span>
+      <span id="progressSpeed">-- KB/s</span>
+    </div>
+  </div>
+
+  <!-- Generic Action Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <h3 class="modal-title" id="modalTitle">Título do Modal</h3>
+      <div id="modalBodyText" style="margin-bottom: 12px; font-size: 0.9rem; color: var(--text-muted); display: none;"></div>
+      <input type="text" class="modal-input" id="modalInput" style="display: none;">
+      <div class="modal-actions">
+        <button class="btn" id="modalBtnCancel">Cancelar</button>
+        <button class="btn btn-primary" id="modalBtnConfirm">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // -------------------------------------------------------------
+    // Core Client Application (Vanilla JS, Zero Dependency)
+    // -------------------------------------------------------------
+    (function() {
+      // 1. Token Handling (Extract, Store in Session, Clean URL)
+      const urlParams = new URLSearchParams(window.location.search);
+      let token = urlParams.get('token');
+      if (token) {
+        sessionStorage.setItem('r36s_auth_token', token);
+        // Clean URL to protect token from browser history
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else {
+        token = sessionStorage.getItem('r36s_auth_token');
+      }
+
+      if (!token) {
+        document.body.innerHTML = `
+          <div style="padding: 40px; text-align: center;">
+            <h2>Sessão Não Autorizada</h2>
+            <p style="color: #9492a6; margin-top: 10px;">Escaneie o QR Code na tela do console R36S para acessar.</p>
+          </div>
+        `;
+        return;
+      }
+
+      let currentPath = "/roms";
+      let directoryEntries = [];
+      let selectedPaths = new Set();
+      let activeStorageRoots = [];
+
+      // API Helper
+      async function apiRequest(url, method = "GET", body = null) {
+        const headers = { 'X-Auth-Token': token };
+        if (body && !(body instanceof FormData)) {
+          headers['Content-Type'] = 'application/json';
+        }
+        const resp = await fetch(url, {
+          method,
+          headers,
+          body: body && !(body instanceof FormData) ? JSON.stringify(body) : body
+        });
+        if (resp.status === 401) {
+          sessionStorage.removeItem('r36s_auth_token');
+          alert("Sessão expirada. Escaneie o QR Code novamente.");
+          window.location.reload();
+          throw new Error("Unauthorized");
+        }
+        return resp;
+      }
+
+      // Formatters
+      function formatSize(bytes) {
+        if (bytes === 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB", "TB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+      }
+
+      function formatDate(timestamp) {
+        if (!timestamp) return "--";
+        const d = new Date(timestamp * 1000);
+        return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+
+      function getFileIcon(name, isDir) {
+        if (isDir) return "📁";
+        const ext = name.split('.').pop().toLowerCase();
+        if (['zip', '7z', 'rar', 'tar', 'gz'].includes(ext)) return "📦";
+        if (['sfc', 'smc', 'nes', 'gb', 'gbc', 'gba', 'gen', 'md', 'pbp', 'chd', 'iso', 'cue', 'bin'].includes(ext)) return "🎮";
+        if (['png', 'jpg', 'jpeg', 'bmp', 'webp'].includes(ext)) return "🖼";
+        if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) return "🎵";
+        if (['mp4', 'mkv', 'avi'].includes(ext)) return "🎬";
+        if (['txt', 'cfg', 'ini', 'json', 'sh', 'xml', 'gptk'].includes(ext)) return "📄";
+        return "📄";
+      }
+
+      // Storage Roots Loader
+      async function loadStorageRoots() {
+        try {
+          const resp = await apiRequest('/api/storage');
+          const json = await resp.json();
+          if (json.success && json.roots) {
+            activeStorageRoots = json.roots;
+            renderStoragePills();
+            if (activeStorageRoots.length > 0 && !currentPath) {
+              currentPath = activeStorageRoots[0].path;
+            }
+          }
+        } catch (e) {
+          console.error("Failed to load storage roots", e);
+        }
+      }
+
+      function renderStoragePills() {
+        const bar = document.getElementById('storageBar');
+        bar.innerHTML = "";
+        activeStorageRoots.forEach(root => {
+          const pill = document.createElement('button');
+          pill.className = 'storage-pill' + (currentPath.startsWith(root.path) ? ' active' : '');
+          pill.innerHTML = `<span>💾</span> <span>${root.display_name}</span> <small style="opacity:0.7">(${formatSize(root.free_bytes)} livres)</small>`;
+          pill.onclick = () => {
+            currentPath = root.path;
+            loadDirectory(currentPath);
+          };
+          bar.appendChild(pill);
+        });
+      }
+
+      // Directory Loader
+      async function loadDirectory(path) {
+        selectedPaths.clear();
+        updateActionButtons();
+        document.getElementById('selectAll').checked = false;
+
+        const tbody = document.getElementById('fileTableBody');
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted); padding: 30px;">Carregando...</td></tr>`;
+
+        try {
+          const resp = await apiRequest(`/api/fs/list?path=${encodeURIComponent(path)}`);
+          const json = await resp.json();
+          if (json.success) {
+            currentPath = json.data.current_path;
+            directoryEntries = json.data.entries;
+            renderBreadcrumbs(currentPath);
+            renderStoragePills();
+            filterAndRenderTable();
+          } else {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--danger); padding: 20px;">Erro: ${json.error}</td></tr>`;
+          }
+        } catch (e) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--danger); padding: 20px;">Falha de conexão com o console.</td></tr>`;
+        }
+      }
+
+      function renderBreadcrumbs(path) {
+        const bar = document.getElementById('breadcrumbBar');
+        bar.innerHTML = "";
+        const parts = path.split('/').filter(Boolean);
+
+        const rootCrumb = document.createElement('span');
+        rootCrumb.className = 'crumb';
+        rootCrumb.textContent = "Raiz";
+        rootCrumb.onclick = () => loadDirectory("/");
+        bar.appendChild(rootCrumb);
+
+        let accumulated = "";
+        parts.forEach((p, idx) => {
+          accumulated += "/" + p;
+          const sep = document.createElement('span');
+          sep.className = 'crumb-sep';
+          sep.textContent = "›";
+          bar.appendChild(sep);
+
+          const crumb = document.createElement('span');
+          const isLast = idx === parts.length - 1;
+          crumb.className = 'crumb' + (isLast ? ' current' : '');
+          crumb.textContent = p;
+          if (!isLast) {
+            const dest = accumulated;
+            crumb.onclick = () => loadDirectory(dest);
+          }
+          bar.appendChild(crumb);
+        });
+      }
+
+      function filterAndRenderTable() {
+        const term = document.getElementById('searchInput').value.toLowerCase().trim();
+        const tbody = document.getElementById('fileTableBody');
+        tbody.innerHTML = "";
+
+        const filtered = directoryEntries.filter(e => e.name.toLowerCase().includes(term));
+
+        if (filtered.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted); padding: 25px;">Nenhum item nesta pasta.</td></tr>`;
+          return;
+        }
+
+        filtered.forEach(entry => {
+          const tr = document.createElement('tr');
+          if (selectedPaths.has(entry.path)) tr.classList.add('selected');
+
+          const tdCheck = document.createElement('td');
+          tdCheck.className = 'checkbox-col';
+          const chk = document.createElement('input');
+          chk.type = 'checkbox';
+          chk.checked = selectedPaths.has(entry.path);
+          chk.onchange = (e) => {
+            if (e.target.checked) selectedPaths.add(entry.path);
+            else selectedPaths.delete(entry.path);
+            tr.classList.toggle('selected', e.target.checked);
+            updateActionButtons();
+          };
+          tdCheck.appendChild(chk);
+
+          const tdName = document.createElement('td');
+          const itemLink = document.createElement('div');
+          itemLink.className = 'item-name';
+          itemLink.innerHTML = `<span class="item-icon">${getFileIcon(entry.name, entry.is_dir)}</span> <span>${entry.name}</span>`;
+          itemLink.onclick = () => {
+            if (entry.is_dir) {
+              loadDirectory(entry.path);
+            } else {
+              triggerDownload(entry.path);
+            }
+          };
+          tdName.appendChild(itemLink);
+
+          const tdSize = document.createElement('td');
+          tdSize.className = 'text-muted';
+          tdSize.textContent = entry.is_dir ? "--" : formatSize(entry.size);
+
+          const tdDate = document.createElement('td');
+          tdDate.className = 'text-muted';
+          tdDate.textContent = formatDate(entry.mtime);
+
+          const tdActions = document.createElement('td');
+          tdActions.style.textAlign = "right";
+          const actWrap = document.createElement('div');
+          actWrap.className = 'action-icons';
+
+          if (!entry.is_dir) {
+            const btnDown = document.createElement('button');
+            btnDown.className = 'icon-btn';
+            btnDown.title = 'Baixar';
+            btnDown.textContent = '⬇';
+            btnDown.onclick = (e) => { e.stopPropagation(); triggerDownload(entry.path); };
+            actWrap.appendChild(btnDown);
+          }
+
+          const btnRename = document.createElement('button');
+          btnRename.className = 'icon-btn';
+          btnRename.title = 'Renomear';
+          btnRename.textContent = '✏';
+          btnRename.onclick = (e) => { e.stopPropagation(); promptRename(entry.path, entry.name); };
+          actWrap.appendChild(btnRename);
+
+          tdActions.appendChild(actWrap);
+
+          tr.appendChild(tdCheck);
+          tr.appendChild(tdName);
+          tr.appendChild(tdSize);
+          tr.appendChild(tdDate);
+          tr.appendChild(tdActions);
+
+          tbody.appendChild(tr);
+        });
+      }
+
+      function updateActionButtons() {
+        const count = selectedPaths.size;
+        const btnDel = document.getElementById('btnDeleteSelected');
+        const btnZip = document.getElementById('btnDownloadSelected');
+        btnDel.disabled = count === 0;
+        btnDel.textContent = `🗑 Excluir (${count})`;
+        btnZip.disabled = count === 0;
+      }
+
+      document.getElementById('selectAll').onchange = (e) => {
+        const check = e.target.checked;
+        directoryEntries.forEach(item => {
+          if (check) selectedPaths.add(item.path);
+          else selectedPaths.delete(item.path);
+        });
+        filterAndRenderTable();
+        updateActionButtons();
+      };
+
+      document.getElementById('searchInput').oninput = filterAndRenderTable;
+      document.getElementById('btnRefresh').onclick = () => loadDirectory(currentPath);
+
+      // Downloads
+      function triggerDownload(filePath) {
+        const downloadUrl = `/api/download?path=${encodeURIComponent(filePath)}&token=${token}`;
+        window.location.href = downloadUrl;
+      }
+
+      document.getElementById('btnDownloadSelected').onclick = async () => {
+        if (selectedPaths.size === 0) return;
+        const paths = Array.from(selectedPaths);
+        try {
+          const resp = await apiRequest('/api/download-zip', 'POST', { paths });
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = "R36S_Backup.zip";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          } else {
+            alert("Erro ao gerar ZIP para download.");
+          }
+        } catch (e) {
+          alert("Falha na solicitação de download em lote.");
+        }
+      };
+
+      // Modals
+      const modalOverlay = document.getElementById('modalOverlay');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBodyText = document.getElementById('modalBodyText');
+      const modalInput = document.getElementById('modalInput');
+      const modalBtnCancel = document.getElementById('modalBtnCancel');
+      const modalBtnConfirm = document.getElementById('modalBtnConfirm');
+      let currentModalAction = null;
+
+      function showModal({ title, message, defaultValue, hasInput, onConfirm, isDanger = false }) {
+        modalTitle.textContent = title;
+        if (message) {
+          modalBodyText.textContent = message;
+          modalBodyText.style.display = "block";
+        } else {
+          modalBodyText.style.display = "none";
+        }
+
+        if (hasInput) {
+          modalInput.style.display = "block";
+          modalInput.value = defaultValue || "";
+          setTimeout(() => modalInput.focus(), 100);
+        } else {
+          modalInput.style.display = "none";
+        }
+
+        modalBtnConfirm.className = isDanger ? 'btn btn-danger' : 'btn btn-primary';
+        modalBtnConfirm.textContent = isDanger ? 'Confirmar Exclusão' : 'Salvar';
+
+        currentModalAction = onConfirm;
+        modalOverlay.style.display = "flex";
+      }
+
+      modalBtnCancel.onclick = () => { modalOverlay.style.display = "none"; };
+      modalBtnConfirm.onclick = async () => {
+        if (currentModalAction) {
+          await currentModalAction(modalInput.value);
+        }
+        modalOverlay.style.display = "none";
+      };
+
+      // New Folder
+      document.getElementById('btnNewFolder').onclick = () => {
+        showModal({
+          title: "Criar Nova Pasta",
+          hasInput: true,
+          defaultValue: "",
+          onConfirm: async (val) => {
+            if (!val.trim()) return;
+            const resp = await apiRequest('/api/fs/mkdir', 'POST', { parent_path: currentPath, name: val.trim() });
+            const res = await resp.json();
+            if (res.success) loadDirectory(currentPath);
+            else alert("Erro: " + res.error);
+          }
+        });
+      };
+
+      // Rename
+      function promptRename(oldPath, oldName) {
+        showModal({
+          title: "Renomear Item",
+          hasInput: true,
+          defaultValue: oldName,
+          onConfirm: async (val) => {
+            if (!val.trim() || val.trim() === oldName) return;
+            const resp = await apiRequest('/api/fs/rename', 'POST', { old_path: oldPath, new_name: val.trim() });
+            const res = await resp.json();
+            if (res.success) loadDirectory(currentPath);
+            else alert("Erro: " + res.error);
+          }
+        });
+      }
+
+      // Delete Selected
+      document.getElementById('btnDeleteSelected').onclick = () => {
+        const count = selectedPaths.size;
+        if (count === 0) return;
+        showModal({
+          title: `Excluir ${count} item(ns)?`,
+          message: "Atenção: Os arquivos e diretórios selecionados serão apagados permanentemente do cartão SD do R36S.",
+          hasInput: false,
+          isDanger: true,
+          onConfirm: async () => {
+            const resp = await apiRequest('/api/fs/delete', 'POST', { paths: Array.from(selectedPaths) });
+            const res = await resp.json();
+            if (res.success) loadDirectory(currentPath);
+            else alert("Erro ao excluir alguns itens.");
+          }
+        });
+      };
+
+      // Remote Shutdown
+      document.getElementById('btnShutdown').onclick = () => {
+        showModal({
+          title: "Encerrar Servidor no R36S?",
+          message: "O serviço web será finalizado e o R36S retornará imediatamente ao EmulationStation.",
+          hasInput: false,
+          isDanger: true,
+          onConfirm: async () => {
+            await apiRequest('/api/shutdown', 'POST');
+            document.body.innerHTML = `
+              <div style="padding: 40px; text-align: center;">
+                <h2>Servidor Encerrado</h2>
+                <p style="color: #9492a6; margin-top: 10px;">O R36S retornou ao EmulationStation com sucesso. Você pode fechar esta aba.</p>
+              </div>
+            `;
+          }
+        });
+      };
+
+      // -------------------------------------------------------------
+      // Resumable Chunked Upload Implementation (Zero-Dependency)
+      // -------------------------------------------------------------
+      const fileInput = document.getElementById('fileInput');
+      const btnUpload = document.getElementById('btnUpload');
+      const progressPanel = document.getElementById('progressPanel');
+      const progressTitle = document.getElementById('progressTitle');
+      const progressPercent = document.getElementById('progressPercent');
+      const progressBarFill = document.getElementById('progressBarFill');
+      const progressBytes = document.getElementById('progressBytes');
+      const progressSpeed = document.getElementById('progressSpeed');
+
+      btnUpload.onclick = () => fileInput.click();
+      fileInput.onchange = () => {
+        if (fileInput.files.length > 0) {
+          uploadFilesQueue(Array.from(fileInput.files));
+        }
+      };
+
+      async function uploadFilesQueue(files) {
+        for (let i = 0; i < files.length; i++) {
+          await uploadSingleFile(files[i], i + 1, files.length);
+        }
+        fileInput.value = "";
+        progressPanel.style.display = "none";
+        loadDirectory(currentPath);
+      }
+
+      async function uploadSingleFile(file, index, total) {
+        progressPanel.style.display = "block";
+        progressTitle.textContent = `[${index}/${total}] Enviando ${file.name}...`;
+
+        // 1. Handshake: Init session on server
+        const initResp = await apiRequest('/api/upload/init', 'POST', {
+          filename: file.name,
+          target_dir: currentPath,
+          total_size: file.size
+        });
+        const initData = await initResp.json();
+        if (!initData.success) {
+          alert(`Erro ao iniciar upload de ${file.name}: ${initData.error}`);
+          return;
+        }
+
+        const uploadId = initData.upload_id;
+        const chunkSize = initData.chunk_size || (2 * 1024 * 1024);
+        let offset = initData.received_bytes || 0;
+        let chunkIndex = Math.floor(offset / chunkSize);
+
+        const startTime = Date.now();
+        let bytesUploadedSinceStart = 0;
+
+        while (offset < file.size) {
+          const chunkBlob = file.slice(offset, offset + chunkSize);
+          const chunkBuffer = await chunkBlob.arrayBuffer();
+
+          const chunkResp = await fetch('/api/upload/chunk', {
+            method: 'POST',
+            headers: {
+              'X-Auth-Token': token,
+              'X-Upload-Id': uploadId,
+              'X-Chunk-Index': chunkIndex.toString(),
+              'X-Chunk-Offset': offset.toString(),
+              'Content-Type': 'application/octet-stream'
+            },
+            body: chunkBuffer
+          });
+
+          if (!chunkResp.ok) {
+            throw new Error(`Falha no envio do chunk ${chunkIndex}`);
+          }
+
+          offset += chunkBuffer.byteLength;
+          bytesUploadedSinceStart += chunkBuffer.byteLength;
+          chunkIndex++;
+
+          // Update Progress
+          const pct = Math.min(100, Math.round((offset / file.size) * 100));
+          progressPercent.textContent = pct + "%";
+          progressBarFill.style.width = pct + "%";
+          progressBytes.textContent = `${formatSize(offset)} / ${formatSize(file.size)}`;
+
+          const elapsedSec = (Date.now() - startTime) / 1000;
+          if (elapsedSec > 0.5) {
+            const speed = bytesUploadedSinceStart / elapsedSec;
+            progressSpeed.textContent = formatSize(speed) + "/s";
+          }
+        }
+
+        // 2. Finalize Session (Atomic rename on server)
+        const compResp = await apiRequest('/api/upload/complete', 'POST', { upload_id: uploadId });
+        const compData = await compResp.json();
+        if (!compData.success) {
+          alert(`Erro na finalização: ${compData.error}`);
+        }
+      }
+
+      // Drag and Drop
+      const dropTarget = document.getElementById('dropTarget');
+      ['dragenter', 'dragover'].forEach(name => {
+        dropTarget.addEventListener(name, (e) => { e.preventDefault(); dropTarget.classList.add('drop-zone'); }, false);
+      });
+      ['dragleave', 'drop'].forEach(name => {
+        dropTarget.addEventListener(name, (e) => { e.preventDefault(); dropTarget.classList.remove('drop-zone'); }, false);
+      });
+      dropTarget.addEventListener('drop', (e) => {
+        if (e.dataTransfer.files.length > 0) {
+          uploadFilesQueue(Array.from(e.dataTransfer.files));
+        }
+      });
+
+      // Initial Bootstrap
+      loadStorageRoots().then(() => loadDirectory(currentPath));
+    })();
+  </script>
+</body>
+</html>

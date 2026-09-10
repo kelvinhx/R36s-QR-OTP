@@ -1,0 +1,6 @@
+{
+  "name": "R36S Engineering Base",
+  "description": "Base de Engenharia permanente e centro de referência técnica para desenvolvimento no console R36S e dArkOS / dArkOS RE.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
