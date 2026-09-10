@@ -6,19 +6,21 @@
   <title>R36S Web File Manager</title>
   <style>
     :root {
-      --bg: #0d0c14;
-      --surface: #171622;
-      --surface-hover: #222033;
-      --border: #2d2b42;
-      --primary: #7c3aed;
-      --primary-hover: #6d28d9;
-      --text: #f4f4f7;
+      --bg: #0d0c13;
+      --surface: #161520;
+      --surface-hover: #1f1d2c;
+      --border: #282637;
+      --primary: #8b5cf6;
+      --primary-hover: #7c3aed;
+      --accent: #38bdf8;
+      --text: #f3f4f6;
       --text-muted: #9492a6;
       --danger: #ef4444;
       --danger-hover: #dc2626;
       --success: #10b981;
       --radius: 8px;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -27,43 +29,48 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      -webkit-tap-highlight-color: transparent;
     }
+
+    /* Header */
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
-      padding: 12px 16px;
+      padding: 12px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 1.1rem;
+      gap: 10px;
       font-weight: 700;
-      color: #fff;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
     }
     .brand-badge {
-      background: var(--primary);
       font-size: 0.7rem;
+      background: rgba(139, 92, 246, 0.2);
+      color: var(--primary);
+      border: 1px solid rgba(139, 92, 246, 0.4);
       padding: 2px 6px;
       border-radius: 4px;
       font-weight: 600;
-      letter-spacing: 0.5px;
+      text-transform: uppercase;
     }
     .header-actions {
       display: flex;
-      align-items: center;
-      gap: 8px;
+      gap: 10px;
     }
+
+    /* Buttons */
     .btn {
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: var(--surface-hover);
       color: var(--text);
+      border: 1px solid var(--border);
       padding: 7px 14px;
       border-radius: var(--radius);
       font-size: 0.85rem;
@@ -73,37 +80,43 @@
       align-items: center;
       gap: 6px;
       transition: all 0.15s ease;
+      user-select: none;
       white-space: nowrap;
     }
-    .btn:hover { background: var(--surface-hover); }
+    .btn:hover { background: #29273a; }
+    .btn:active { transform: translateY(1px); }
     .btn-primary {
       background: var(--primary);
       border-color: var(--primary);
-      color: #fff;
+      color: #ffffff;
     }
     .btn-primary:hover { background: var(--primary-hover); }
     .btn-danger {
       background: rgba(239, 68, 68, 0.15);
       border-color: rgba(239, 68, 68, 0.4);
-      color: #fca5a5;
+      color: var(--danger);
     }
     .btn-danger:hover { background: var(--danger); color: #fff; }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
 
-    /* Storage bar */
+    /* Storage Selector Bar */
     .storage-bar {
-      background: #12111b;
+      background: #111019;
       border-bottom: 1px solid var(--border);
-      padding: 8px 16px;
+      padding: 8px 20px;
       display: flex;
-      align-items: center;
-      gap: 8px;
+      gap: 10px;
       overflow-x: auto;
     }
     .storage-pill {
       background: var(--surface);
       border: 1px solid var(--border);
-      padding: 5px 12px;
+      color: var(--text-muted);
+      padding: 6px 12px;
       border-radius: 20px;
       font-size: 0.8rem;
       cursor: pointer;
@@ -111,50 +124,56 @@
       align-items: center;
       gap: 6px;
       white-space: nowrap;
-      transition: all 0.15s;
     }
     .storage-pill.active {
-      background: var(--primary);
+      background: rgba(139, 92, 246, 0.15);
       border-color: var(--primary);
-      color: #fff;
+      color: var(--text);
       font-weight: 600;
     }
 
-    /* Toolbar & Breadcrumb */
-    .toolbar {
-      padding: 12px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+    /* Clipboard Banner */
+    .clipboard-bar {
+      background: rgba(56, 189, 248, 0.12);
+      border-bottom: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 8px 20px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--accent);
     }
-    @media (min-width: 640px) {
-      .toolbar {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-      }
+    .clipboard-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      padding: 12px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
     }
     .breadcrumbs {
       display: flex;
       align-items: center;
+      gap: 6px;
       flex-wrap: wrap;
-      gap: 4px;
       font-size: 0.85rem;
-      background: var(--surface);
-      padding: 6px 12px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      max-width: 100%;
-      overflow-x: auto;
     }
     .crumb {
       color: var(--text-muted);
       cursor: pointer;
-      text-decoration: none;
+      padding: 3px 6px;
+      border-radius: 4px;
     }
-    .crumb:hover { color: var(--text); text-decoration: underline; }
+    .crumb:hover { background: var(--surface-hover); color: var(--text); }
     .crumb.current { color: var(--text); font-weight: 600; cursor: default; }
-    .crumb-sep { color: var(--border); margin: 0 2px; }
+    .crumb-sep { color: var(--border); }
 
     .actions-row {
       display: flex;
@@ -166,37 +185,30 @@
       background: var(--surface);
       border: 1px solid var(--border);
       color: var(--text);
-      padding: 7px 12px;
+      padding: 6px 12px;
       border-radius: var(--radius);
       font-size: 0.85rem;
       outline: none;
-      flex: 1;
-      min-width: 140px;
+      width: 170px;
     }
     .search-box:focus { border-color: var(--primary); }
 
-    /* File List Area */
-    main {
-      flex: 1;
-      padding: 0 16px 24px;
-      display: flex;
-      flex-direction: column;
-    }
+    /* Main Table */
+    main { flex: 1; padding: 16px 20px; }
     .file-table-container {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       overflow: hidden;
-      flex: 1;
     }
     .file-table {
       width: 100%;
       border-collapse: collapse;
       text-align: left;
-      font-size: 0.88rem;
+      font-size: 0.85rem;
     }
     .file-table th {
-      background: rgba(0, 0, 0, 0.2);
+      background: #12111b;
       padding: 10px 14px;
       color: var(--text-muted);
       font-weight: 600;
@@ -205,48 +217,44 @@
     }
     .file-table td {
       padding: 10px 14px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      border-bottom: 1px solid var(--border);
       vertical-align: middle;
     }
+    .file-table tr:last-child td { border-bottom: none; }
     .file-table tr:hover td { background: var(--surface-hover); }
-    .file-table tr.selected td { background: rgba(124, 58, 237, 0.15); }
+    .file-table tr.selected td { background: rgba(139, 92, 246, 0.1); }
+
+    .checkbox-col { width: 36px; text-align: center; }
     .item-name {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       cursor: pointer;
-      color: var(--text);
-      text-decoration: none;
+      font-weight: 500;
       word-break: break-all;
     }
-    .item-name:hover { color: #a78bfa; }
-    .item-icon { font-size: 1.2rem; flex-shrink: 0; }
-    .text-muted { color: var(--text-muted); }
-    .checkbox-col { width: 36px; text-align: center; }
+    .item-icon { font-size: 1.15rem; flex-shrink: 0; }
     .action-icons {
       display: flex;
-      gap: 6px;
+      gap: 4px;
       justify-content: flex-end;
     }
     .icon-btn {
       background: transparent;
       border: none;
       color: var(--text-muted);
-      cursor: pointer;
-      padding: 4px;
+      padding: 4px 6px;
       border-radius: 4px;
-      font-size: 1rem;
+      cursor: pointer;
     }
-    .icon-btn:hover { color: var(--text); background: var(--surface-hover); }
+    .icon-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
 
-    /* Progress and Upload Card */
+    /* Progress Overlay / Panel */
     .progress-panel {
       position: fixed;
-      bottom: 16px;
-      right: 16px;
-      left: 16px;
-      max-width: 480px;
-      margin-left: auto;
+      bottom: 20px;
+      right: 20px;
+      width: 320px;
       background: #1a1829;
       border: 1px solid var(--primary);
       box-shadow: 0 10px 25px rgba(0,0,0,0.5);
@@ -300,7 +308,7 @@
       border-radius: var(--radius);
       padding: 20px;
       width: 100%;
-      max-width: 400px;
+      max-width: 420px;
       box-shadow: 0 20px 40px rgba(0,0,0,0.6);
     }
     .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; }
@@ -320,7 +328,6 @@
       gap: 10px;
     }
 
-    /* Drag & drop overlay */
     .drop-zone {
       border: 2px dashed var(--primary);
       background: rgba(124, 58, 237, 0.08);
@@ -333,7 +340,7 @@
   <header>
     <div class="brand">
       <span>🎮 R36S File Manager</span>
-      <span class="brand-badge">LAN</span>
+      <span class="brand-badge">dArkOS RE</span>
     </div>
     <div class="header-actions">
       <button class="btn" id="btnRefresh" title="Recarregar">🔄 Atualizar</button>
@@ -342,20 +349,27 @@
   </header>
 
   <!-- Storage Selector -->
-  <div class="storage-bar" id="storageBar">
-    <!-- Storage pills injected via JS -->
+  <div class="storage-bar" id="storageBar"></div>
+
+  <!-- Clipboard Banner (Copy / Move Status) -->
+  <div class="clipboard-bar" id="clipboardBar">
+    <span id="clipboardInfo">📋 0 itens na área de transferência</span>
+    <div class="clipboard-actions">
+      <button class="btn btn-primary" id="btnPasteHere">📥 Colar Aqui</button>
+      <button class="btn" id="btnClearClipboard">✖ Cancelar</button>
+    </div>
   </div>
 
   <!-- Toolbar -->
   <div class="toolbar">
-    <div class="breadcrumbs" id="breadcrumbBar">
-      <!-- Breadcrumbs injected via JS -->
-    </div>
+    <div class="breadcrumbs" id="breadcrumbBar"></div>
     <div class="actions-row">
-      <input type="text" class="search-box" id="searchInput" placeholder="Filtrar nesta pasta...">
+      <input type="text" class="search-box" id="searchInput" placeholder="Filtrar pasta...">
       <input type="file" id="fileInput" multiple style="display: none;">
       <button class="btn btn-primary" id="btnUpload">📤 Enviar</button>
       <button class="btn" id="btnNewFolder">📁 Nova Pasta</button>
+      <button class="btn" id="btnCopySelected" disabled>📋 Copiar</button>
+      <button class="btn" id="btnMoveSelected" disabled>✂ Mover</button>
       <button class="btn btn-danger" id="btnDeleteSelected" disabled>🗑 Excluir</button>
       <button class="btn" id="btnDownloadSelected" disabled>⬇ Baixar (ZIP)</button>
     </div>
@@ -371,7 +385,7 @@
             <th>Nome</th>
             <th style="width: 100px;">Tamanho</th>
             <th style="width: 150px;">Modificado</th>
-            <th style="width: 90px; text-align: right;">Ações</th>
+            <th style="width: 110px; text-align: right;">Ações</th>
           </tr>
         </thead>
         <tbody id="fileTableBody">
@@ -384,7 +398,7 @@
   <!-- Progress Floating Panel -->
   <div class="progress-panel" id="progressPanel">
     <div class="progress-header">
-      <span id="progressTitle">Enviando arquivo...</span>
+      <span id="progressTitle">Operação em andamento...</span>
       <span id="progressPercent">0%</span>
     </div>
     <div class="progress-bar-bg">
@@ -399,10 +413,10 @@
   <!-- Generic Action Modal -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal">
-      <h3 class="modal-title" id="modalTitle">Título do Modal</h3>
+      <h3 class="modal-title" id="modalTitle">Título</h3>
       <div id="modalBodyText" style="margin-bottom: 12px; font-size: 0.9rem; color: var(--text-muted); display: none;"></div>
       <input type="text" class="modal-input" id="modalInput" style="display: none;">
-      <div class="modal-actions">
+      <div class="modal-actions" id="modalActions">
         <button class="btn" id="modalBtnCancel">Cancelar</button>
         <button class="btn btn-primary" id="modalBtnConfirm">Confirmar</button>
       </div>
@@ -410,16 +424,12 @@
   </div>
 
   <script>
-    // -------------------------------------------------------------
-    // Core Client Application (Vanilla JS, Zero Dependency)
-    // -------------------------------------------------------------
     (function() {
-      // 1. Token Handling (Extract, Store in Session, Clean URL)
+      // 1. Token Handling (Session Storage & Strip from URL to avoid leaking in history)
       const urlParams = new URLSearchParams(window.location.search);
       let token = urlParams.get('token');
       if (token) {
         sessionStorage.setItem('r36s_auth_token', token);
-        // Clean URL to protect token from browser history
         window.history.replaceState({}, document.title, window.location.pathname);
       } else {
         token = sessionStorage.getItem('r36s_auth_token');
@@ -427,20 +437,21 @@
 
       if (!token) {
         document.body.innerHTML = `
-          <div style="padding: 40px; text-align: center;">
+          <div style="padding: 50px; text-align: center;">
             <h2>Sessão Não Autorizada</h2>
-            <p style="color: #9492a6; margin-top: 10px;">Escaneie o QR Code na tela do console R36S para acessar.</p>
+            <p style="color: #9492a6; margin-top: 12px;">Escaneie o QR Code na tela do console R36S para acessar o gerenciador.</p>
           </div>
         `;
         return;
       }
 
-      let currentPath = "/roms";
+      let currentPath = "";
       let directoryEntries = [];
       let selectedPaths = new Set();
       let activeStorageRoots = [];
+      let clipboard = null; // { action: 'copy'|'move', paths: [] }
 
-      // API Helper
+      // API Helper with authentication headers
       async function apiRequest(url, method = "GET", body = null) {
         const headers = { 'X-Auth-Token': token };
         if (body && !(body instanceof FormData)) {
@@ -460,9 +471,8 @@
         return resp;
       }
 
-      // Formatters
       function formatSize(bytes) {
-        if (bytes === 0) return "0 B";
+        if (!bytes || bytes === 0) return "0 B";
         const k = 1024;
         const sizes = ["B", "KB", "MB", "GB", "TB"];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -492,15 +502,15 @@
         try {
           const resp = await apiRequest('/api/storage');
           const json = await resp.json();
-          if (json.success && json.roots) {
+          if (json.success && json.roots && json.roots.length > 0) {
             activeStorageRoots = json.roots;
             renderStoragePills();
-            if (activeStorageRoots.length > 0 && !currentPath) {
+            if (!currentPath) {
               currentPath = activeStorageRoots[0].path;
             }
           }
         } catch (e) {
-          console.error("Failed to load storage roots", e);
+          console.error("Erro ao carregar armazenamentos:", e);
         }
       }
 
@@ -541,22 +551,29 @@
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--danger); padding: 20px;">Erro: ${json.error}</td></tr>`;
           }
         } catch (e) {
-          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--danger); padding: 20px;">Falha de conexão com o console.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--danger); padding: 20px;">Falha de comunicação com o console R36S.</td></tr>`;
         }
       }
 
+      // Breadcrumb Navigation (Fixed: "Raiz" navigates to storage root, NEVER to /)
       function renderBreadcrumbs(path) {
         const bar = document.getElementById('breadcrumbBar');
         bar.innerHTML = "";
-        const parts = path.split('/').filter(Boolean);
+
+        const currentRootObj = activeStorageRoots.find(r => path.startsWith(r.path)) || activeStorageRoots[0];
+        const rootPath = currentRootObj ? currentRootObj.path : path;
+        const rootLabel = currentRootObj ? currentRootObj.display_name : "Armazenamento";
 
         const rootCrumb = document.createElement('span');
         rootCrumb.className = 'crumb';
-        rootCrumb.textContent = "Raiz";
-        rootCrumb.onclick = () => loadDirectory("/");
+        rootCrumb.textContent = rootLabel;
+        rootCrumb.onclick = () => loadDirectory(rootPath);
         bar.appendChild(rootCrumb);
 
-        let accumulated = "";
+        const relPath = path.startsWith(rootPath) ? path.slice(rootPath.length) : path;
+        const parts = relPath.split('/').filter(Boolean);
+
+        let accumulated = rootPath;
         parts.forEach((p, idx) => {
           accumulated += "/" + p;
           const sep = document.createElement('span');
@@ -584,7 +601,7 @@
         const filtered = directoryEntries.filter(e => e.name.toLowerCase().includes(term));
 
         if (filtered.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted); padding: 25px;">Nenhum item nesta pasta.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted); padding: 25px;">Nenhum item encontrado nesta pasta.</td></tr>`;
           return;
         }
 
@@ -663,11 +680,29 @@
         const count = selectedPaths.size;
         const btnDel = document.getElementById('btnDeleteSelected');
         const btnZip = document.getElementById('btnDownloadSelected');
+        const btnCopy = document.getElementById('btnCopySelected');
+        const btnMove = document.getElementById('btnMoveSelected');
+
         btnDel.disabled = count === 0;
         btnDel.textContent = `🗑 Excluir (${count})`;
         btnZip.disabled = count === 0;
+        btnCopy.disabled = count === 0;
+        btnMove.disabled = count === 0;
       }
 
+      function updateClipboardBar() {
+        const bar = document.getElementById('clipboardBar');
+        const info = document.getElementById('clipboardInfo');
+        if (clipboard && clipboard.paths.length > 0) {
+          bar.style.display = 'flex';
+          const act = clipboard.action === 'copy' ? 'Copiar' : 'Mover';
+          info.textContent = `📋 ${clipboard.paths.length} item(ns) na área de transferência (${act})`;
+        } else {
+          bar.style.display = 'none';
+        }
+      }
+
+      // Selection Handlers
       document.getElementById('selectAll').onchange = (e) => {
         const check = e.target.checked;
         directoryEntries.forEach(item => {
@@ -681,31 +716,136 @@
       document.getElementById('searchInput').oninput = filterAndRenderTable;
       document.getElementById('btnRefresh').onclick = () => loadDirectory(currentPath);
 
-      // Downloads
-      function triggerDownload(filePath) {
-        const downloadUrl = `/api/download?path=${encodeURIComponent(filePath)}&token=${token}`;
-        window.location.href = downloadUrl;
+      // Clipboard Actions (Copy / Move / Paste)
+      document.getElementById('btnCopySelected').onclick = () => {
+        if (selectedPaths.size === 0) return;
+        clipboard = { action: 'copy', paths: Array.from(selectedPaths) };
+        updateClipboardBar();
+      };
+
+      document.getElementById('btnMoveSelected').onclick = () => {
+        if (selectedPaths.size === 0) return;
+        clipboard = { action: 'move', paths: Array.from(selectedPaths) };
+        updateClipboardBar();
+      };
+
+      document.getElementById('btnClearClipboard').onclick = () => {
+        clipboard = null;
+        updateClipboardBar();
+      };
+
+      document.getElementById('btnPasteHere').onclick = async () => {
+        if (!clipboard || clipboard.paths.length === 0) return;
+        const action = clipboard.action;
+        const count = clipboard.paths.length;
+        const actionName = action === 'copy' ? 'copiar' : 'mover';
+
+        showProgressModal(`Executando ${actionName}...`, `Processando ${count} item(ns) no R36S...`);
+
+        try {
+          const resp = await apiRequest('/api/tasks/start', 'POST', {
+            action: action,
+            sources: clipboard.paths,
+            dest_dir: currentPath
+          });
+          const json = await resp.json();
+          if (!json.success) {
+            hideProgressModal();
+            alert("Erro ao iniciar operação: " + json.error);
+            return;
+          }
+
+          const taskId = json.task_id;
+          const poll = setInterval(async () => {
+            try {
+              const statResp = await apiRequest(`/api/tasks/status?id=${taskId}`);
+              const statJson = await statResp.json();
+              if (statJson.success) {
+                const task = statJson.task;
+                updateProgressModal(task.progress_text || "Processando...");
+                if (task.status === "completed") {
+                  clearInterval(poll);
+                  hideProgressModal();
+                  if (action === 'move') {
+                    clipboard = null;
+                    updateClipboardBar();
+                  }
+                  loadDirectory(currentPath);
+                } else if (task.status === "failed") {
+                  clearInterval(poll);
+                  hideProgressModal();
+                  alert("Erro: " + (task.error || "Falha na operação"));
+                }
+              }
+            } catch (err) {
+              clearInterval(poll);
+              hideProgressModal();
+            }
+          }, 800);
+        } catch (e) {
+          hideProgressModal();
+          alert("Falha de conexão.");
+        }
+      };
+
+      // Secure Downloads via Single-Use Ticket (NO master token in URL!)
+      async function triggerDownload(filePath) {
+        try {
+          const resp = await apiRequest('/api/download/ticket', 'POST', { path: filePath });
+          const json = await resp.json();
+          if (json.success && json.download_url) {
+            window.location.href = json.download_url;
+          } else {
+            alert("Erro ao gerar link de download seguro: " + (json.error || ""));
+          }
+        } catch (e) {
+          alert("Falha ao solicitar download.");
+        }
       }
 
+      // Batch ZIP Download (Server-side ZIP, native browser streaming direct to disk, zero RAM on iPhone)
       document.getElementById('btnDownloadSelected').onclick = async () => {
         if (selectedPaths.size === 0) return;
         const paths = Array.from(selectedPaths);
+        showProgressModal("Compactando no R36S...", "Aguarde enquanto o console cria o arquivo ZIP...");
+
         try {
-          const resp = await apiRequest('/api/download-zip', 'POST', { paths });
-          if (resp.ok) {
-            const blob = await resp.blob();
-            const blobUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = "R36S_Backup.zip";
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-          } else {
-            alert("Erro ao gerar ZIP para download.");
+          const resp = await apiRequest('/api/tasks/start', 'POST', { action: 'create_zip', paths });
+          const json = await resp.json();
+          if (!json.success) {
+            hideProgressModal();
+            alert("Erro ao iniciar compactação: " + json.error);
+            return;
           }
+
+          const taskId = json.task_id;
+          const poll = setInterval(async () => {
+            try {
+              const statResp = await apiRequest(`/api/tasks/status?id=${taskId}`);
+              const statJson = await statResp.json();
+              if (statJson.success) {
+                const task = statJson.task;
+                updateProgressModal(task.progress_text || "Compactando...");
+                if (task.status === "completed") {
+                  clearInterval(poll);
+                  hideProgressModal();
+                  if (task.result && task.result.download_url) {
+                    window.location.href = task.result.download_url;
+                  }
+                } else if (task.status === "failed") {
+                  clearInterval(poll);
+                  hideProgressModal();
+                  alert("Erro na compactação: " + (task.error || "Falha"));
+                }
+              }
+            } catch (err) {
+              clearInterval(poll);
+              hideProgressModal();
+            }
+          }, 1000);
         } catch (e) {
-          alert("Falha na solicitação de download em lote.");
+          hideProgressModal();
+          alert("Falha de conexão com o console.");
         }
       };
 
@@ -720,12 +860,8 @@
 
       function showModal({ title, message, defaultValue, hasInput, onConfirm, isDanger = false }) {
         modalTitle.textContent = title;
-        if (message) {
-          modalBodyText.textContent = message;
-          modalBodyText.style.display = "block";
-        } else {
-          modalBodyText.style.display = "none";
-        }
+        modalBodyText.textContent = message || "";
+        modalBodyText.style.display = message ? "block" : "none";
 
         if (hasInput) {
           modalInput.style.display = "block";
@@ -736,10 +872,30 @@
         }
 
         modalBtnConfirm.className = isDanger ? 'btn btn-danger' : 'btn btn-primary';
-        modalBtnConfirm.textContent = isDanger ? 'Confirmar Exclusão' : 'Salvar';
+        modalBtnConfirm.textContent = isDanger ? 'Confirmar Exclusão' : 'Confirmar';
+        modalBtnCancel.style.display = "inline-flex";
+        modalBtnConfirm.style.display = "inline-flex";
 
         currentModalAction = onConfirm;
         modalOverlay.style.display = "flex";
+      }
+
+      function showProgressModal(title, text) {
+        modalTitle.textContent = title;
+        modalBodyText.textContent = text;
+        modalBodyText.style.display = "block";
+        modalInput.style.display = "none";
+        modalBtnCancel.style.display = "none";
+        modalBtnConfirm.style.display = "none";
+        modalOverlay.style.display = "flex";
+      }
+
+      function updateProgressModal(text) {
+        modalBodyText.textContent = text;
+      }
+
+      function hideProgressModal() {
+        modalOverlay.style.display = "none";
       }
 
       modalBtnCancel.onclick = () => { modalOverlay.style.display = "none"; };
@@ -810,9 +966,9 @@
           onConfirm: async () => {
             await apiRequest('/api/shutdown', 'POST');
             document.body.innerHTML = `
-              <div style="padding: 40px; text-align: center;">
+              <div style="padding: 50px; text-align: center;">
                 <h2>Servidor Encerrado</h2>
-                <p style="color: #9492a6; margin-top: 10px;">O R36S retornou ao EmulationStation com sucesso. Você pode fechar esta aba.</p>
+                <p style="color: #9492a6; margin-top: 12px;">O R36S retornou ao EmulationStation com sucesso. Você pode fechar esta aba com segurança.</p>
               </div>
             `;
           }
@@ -851,17 +1007,27 @@
         progressPanel.style.display = "block";
         progressTitle.textContent = `[${index}/${total}] Preparando ${file.name}...`;
 
-        // Check if there is an active resumable upload session in localStorage
+        // Check active resumable upload session in localStorage
         const resumeStorageKey = `r36s_upload_${currentPath}_${file.name}_${file.size}`;
-        const existingSessionId = localStorage.getItem(resumeStorageKey);
+        let savedSession = null;
+        try {
+          const raw = localStorage.getItem(resumeStorageKey);
+          if (raw) savedSession = JSON.parse(raw);
+        } catch (e) {}
 
         // 1. Handshake: Init or resume session on server
-        const initResp = await apiRequest('/api/upload/init', 'POST', {
+        const initPayload = {
           filename: file.name,
           target_dir: currentPath,
           total_size: file.size,
-          resume_id: existingSessionId || undefined
-        });
+          fingerprint: `${file.name}:${file.size}:${file.lastModified}`
+        };
+        if (savedSession) {
+          initPayload.resume_id = savedSession.upload_id;
+          initPayload.resume_token = savedSession.resume_token;
+        }
+
+        const initResp = await apiRequest('/api/upload/init', 'POST', initPayload);
         const initData = await initResp.json();
         if (!initData.success) {
           alert(`Erro ao iniciar upload de ${file.name}: ${initData.error}`);
@@ -869,7 +1035,11 @@
         }
 
         const uploadId = initData.upload_id;
-        localStorage.setItem(resumeStorageKey, uploadId);
+        const resumeToken = initData.resume_token;
+        localStorage.setItem(resumeStorageKey, JSON.stringify({
+          upload_id: uploadId,
+          resume_token: resumeToken
+        }));
 
         const chunkSize = initData.chunk_size || (2 * 1024 * 1024);
         let offset = initData.received_bytes || 0;
@@ -892,6 +1062,7 @@
             method: 'POST',
             headers: {
               'X-Auth-Token': token,
+              'X-Resume-Token': resumeToken,
               'X-Upload-Id': uploadId,
               'X-Chunk-Index': chunkIndex.toString(),
               'X-Chunk-Offset': offset.toString(),
@@ -901,7 +1072,8 @@
           });
 
           if (!chunkResp.ok) {
-            throw new Error(`Falha no envio do chunk ${chunkIndex}`);
+            const errText = await chunkResp.text();
+            throw new Error(`Falha no envio do fragmento ${chunkIndex}: ${errText}`);
           }
 
           offset += chunkBuffer.byteLength;
@@ -922,7 +1094,10 @@
         }
 
         // 2. Finalize Session (Atomic rename on server)
-        const compResp = await apiRequest('/api/upload/complete', 'POST', { upload_id: uploadId });
+        const compResp = await apiRequest('/api/upload/complete', 'POST', {
+          upload_id: uploadId,
+          resume_token: resumeToken
+        });
         const compData = await compResp.json();
         if (!compData.success) {
           alert(`Erro na finalização: ${compData.error}`);
