@@ -15,71 +15,185 @@ import urllib.parse
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Dict, Any, List, Optional, Tuple
 
-SERVER_VERSION = "1.0.0-eng"
+SERVER_VERSION = "1.1.0-eng"
 CHUNK_SIZE_DEFAULT = 2 * 1024 * 1024  # 2 MB
+DEFAULT_SESSION_TTL_SECONDS = 7200     # 2 hours
 
 class UploadSession:
-    """Manages chunked and resumable upload sessions."""
-    def __init__(self, upload_id: str, filename: str, target_dir: str, total_size: int, token: str):
+    """
+    Manages chunked, resumable, and disk-persisted upload sessions.
+    Maintains atomic metadata on disk to survive server restarts.
+    """
+    def __init__(
+        self,
+        upload_id: str,
+        filename: str,
+        target_dir: str,
+        total_size: int,
+        token: str,
+        expected_hash: Optional[str] = None,
+        created_at: Optional[float] = None,
+        last_activity: Optional[float] = None,
+        received_chunks: Optional[List[int]] = None
+    ):
         self.upload_id = upload_id
-        self.filename = filename
-        self.target_dir = target_dir
-        self.total_size = total_size
+        self.original_filename = filename
+        self.target_dir = os.path.realpath(target_dir)
+        self.total_size = int(total_size)
         self.token = token
-        self.created_at = time.time()
-        self.last_activity = time.time()
-        # Create .part file directly inside the target directory for atomic os.rename()!
-        self.part_path = os.path.join(target_dir, f".{upload_id}.part")
-        self.final_path = os.path.join(target_dir, filename)
-        self.received_bytes = 0
-        self.received_chunks: List[int] = []
+        self.expected_hash = expected_hash
+        self.created_at = created_at if created_at is not None else time.time()
+        self.last_activity = last_activity if last_activity is not None else time.time()
 
-        # Initialize or check existing file
+        # Place .part and .meta.json directly inside destination filesystem for atomic commit
+        self.part_path = os.path.join(self.target_dir, f".{upload_id}.part")
+        self.meta_path = os.path.join(self.target_dir, f".{upload_id}.meta.json")
+        self.final_path = os.path.join(self.target_dir, filename)
+
+        self.received_chunks = received_chunks if received_chunks is not None else []
+        self.received_bytes = 0
+
+        # Initialize or synchronize with file on disk
         if os.path.exists(self.part_path):
             self.received_bytes = os.path.getsize(self.part_path)
         else:
-            # Ensure target directory exists and touch the part file
             os.makedirs(self.target_dir, exist_ok=True)
-            with open(self.part_path, "wb"):
-                pass
+            # Open with O_NOFOLLOW to avoid symlink traversal at creation
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            try:
+                fd = os.open(self.part_path, flags, 0o644)
+                os.close(fd)
+            except FileExistsError:
+                self.received_bytes = os.path.getsize(self.part_path)
+
+        self.save_metadata()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "upload_id": self.upload_id,
+            "filename": self.original_filename,
+            "target_dir": self.target_dir,
+            "total_size": self.total_size,
+            "received_bytes": self.received_bytes,
+            "received_chunks": self.received_chunks,
+            "expected_hash": self.expected_hash,
+            "created_at": self.created_at,
+            "last_activity": self.last_activity,
+            "token": self.token,
+            "part_path": self.part_path,
+            "final_path": self.final_path
+        }
+
+    def save_metadata(self):
+        """Atomically saves upload session state to disk."""
+        try:
+            data = self.to_dict()
+            tmp_meta = f"{self.meta_path}.tmp_{os.getpid()}"
+            with open(tmp_meta, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_meta, self.meta_path)
+        except Exception as e:
+            sys.stderr.write(f"[WARN] Failed to write session metadata for {self.upload_id}: {e}\n")
+
+    @classmethod
+    def load_from_meta(cls, meta_path: str) -> Optional['UploadSession']:
+        """Reconstructs an upload session from an existing metadata file on disk."""
+        try:
+            if not os.path.isfile(meta_path):
+                return None
+            with open(meta_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            part_path = data.get("part_path")
+            if not part_path or not os.path.isfile(part_path):
+                return None
+
+            session = cls(
+                upload_id=data["upload_id"],
+                filename=data["filename"],
+                target_dir=data["target_dir"],
+                total_size=data["total_size"],
+                token=data.get("token", ""),
+                expected_hash=data.get("expected_hash"),
+                created_at=data.get("created_at"),
+                last_activity=data.get("last_activity"),
+                received_chunks=data.get("received_chunks", [])
+            )
+            session.received_bytes = os.path.getsize(part_path)
+            return session
+        except Exception as e:
+            sys.stderr.write(f"[WARN] Failed to load session from {meta_path}: {e}\n")
+            return None
 
     def append_chunk(self, chunk_index: int, offset: int, data: bytes) -> int:
+        """Writes binary chunk using O_NOFOLLOW to mitigate TOCTOU symlink races."""
         self.last_activity = time.time()
-        with open(self.part_path, "r+b" if os.path.exists(self.part_path) else "wb") as f:
-            f.seek(offset)
-            f.write(data)
-            f.flush()
-            os.fsync(f.fileno())
         
+        # Verify that part_path is not a symlink before opening
+        if os.path.islink(self.part_path):
+            raise PermissionError("Part file was converted into a symbolic link")
+
+        flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(self.part_path, flags)
+        try:
+            with os.fdopen(fd, "r+b") as f:
+                f.seek(offset)
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception:
+            # os.fdopen closes fd on exit
+            raise
+
         self.received_bytes = os.path.getsize(self.part_path)
         if chunk_index not in self.received_chunks:
             self.received_chunks.append(chunk_index)
             self.received_chunks.sort()
+
+        self.save_metadata()
         return self.received_bytes
 
     def finalize(self) -> str:
-        """Atomic rename within the exact same filesystem."""
+        """
+        Atomic commit within the exact same filesystem.
+        Validates size, executes atomic os.replace(), and removes metadata.
+        """
         if not os.path.exists(self.part_path):
-            raise FileNotFoundError("Part file missing")
+            raise FileNotFoundError("Part file missing on disk")
+        if os.path.islink(self.part_path):
+            raise PermissionError("Part file cannot be a symbolic link")
+
         actual_size = os.path.getsize(self.part_path)
         if self.total_size > 0 and actual_size != self.total_size:
-            raise ValueError(f"Size mismatch: expected {self.total_size}, got {actual_size}")
-        
-        # Atomic rename on the same filesystem
-        os.rename(self.part_path, self.final_path)
-        return self.final_path
+            raise ValueError(f"Size mismatch: expected {self.total_size} bytes, got {actual_size}")
 
-    def cancel(self):
-        if os.path.exists(self.part_path):
+        # Atomic rename/replace on the exact same filesystem
+        os.replace(self.part_path, self.final_path)
+
+        # Clean up metadata file
+        if os.path.exists(self.meta_path):
             try:
-                os.unlink(self.part_path)
+                os.unlink(self.meta_path)
             except OSError:
                 pass
 
+        return self.final_path
+
+    def cancel(self):
+        """Cancels upload and purges temporary files."""
+        for p in (self.part_path, self.meta_path):
+            if os.path.exists(p):
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+
 
 class FileManagerBackend:
-    """Core filesystem sandbox and state manager."""
-    def __init__(self, allowed_roots: List[str], auth_token: str, ui_html_path: str):
+    """Core filesystem sandbox, state manager, and upload session tracker."""
+    def __init__(self, allowed_roots: List[str], auth_token: str, ui_html_path: str, session_ttl: int = DEFAULT_SESSION_TTL_SECONDS):
         self.allowed_roots = [os.path.realpath(r) for r in allowed_roots if os.path.exists(r)]
         if not self.allowed_roots:
             # Fallback if specific mounts are not yet ready
@@ -87,8 +201,91 @@ class FileManagerBackend:
             self.allowed_roots = [cwd]
         self.auth_token = auth_token
         self.ui_html_path = ui_html_path
+        self.session_ttl = session_ttl
         self.upload_sessions: Dict[str, UploadSession] = {}
         self.start_time = time.time()
+
+        # Initial cleanup and restoration of any active sessions on disk
+        self.cleanup_abandoned_uploads(self.session_ttl)
+
+    def get_session(self, upload_id: str) -> Optional[UploadSession]:
+        """
+        Retrieves active upload session from memory or recovers it from on-disk metadata.
+        Verifies session expiration against session_ttl.
+        """
+        now = time.time()
+        # 1. Check in-memory session table
+        session = self.upload_sessions.get(upload_id)
+        if session:
+            if now - session.last_activity > self.session_ttl:
+                session.cancel()
+                del self.upload_sessions[upload_id]
+                return None
+            return session
+
+        # 2. Not in memory: Scan allowed roots for disk metadata .<upload_id>.meta.json
+        meta_filename = f".{upload_id}.meta.json"
+        for root in self.allowed_roots:
+            try:
+                for dirpath, _, filenames in os.walk(root):
+                    if meta_filename in filenames:
+                        meta_full = os.path.join(dirpath, meta_filename)
+                        recovered = UploadSession.load_from_meta(meta_full)
+                        if recovered:
+                            if now - recovered.last_activity > self.session_ttl:
+                                recovered.cancel()
+                                return None
+                            self.upload_sessions[upload_id] = recovered
+                            return recovered
+            except Exception:
+                pass
+
+        return None
+
+    def cleanup_abandoned_uploads(self, max_age_seconds: Optional[int] = None) -> int:
+        """
+        Scans for abandoned uploads older than max_age_seconds (default: 2 hours)
+        and purges their .part and .meta.json files without disturbing active ones.
+        """
+        ttl = max_age_seconds if max_age_seconds is not None else self.session_ttl
+        now = time.time()
+        purged = 0
+
+        # Purge expired in-memory sessions
+        expired_ids = [uid for uid, s in self.upload_sessions.items() if (now - s.last_activity) > ttl]
+        for uid in expired_ids:
+            self.upload_sessions[uid].cancel()
+            del self.upload_sessions[uid]
+            purged += 1
+
+        # Scan filesystem for orphaned metadata and part files
+        for root in self.allowed_roots:
+            try:
+                for dirpath, _, filenames in os.walk(root):
+                    for f in filenames:
+                        if f.startswith(".") and f.endswith(".meta.json"):
+                            full_meta = os.path.join(dirpath, f)
+                            try:
+                                mtime = os.path.getmtime(full_meta)
+                                if (now - mtime) > ttl:
+                                    uid = f[1:-10]
+                                    part_file = os.path.join(dirpath, f".{uid}.part")
+                                    if os.path.exists(part_file):
+                                        try:
+                                            os.unlink(part_file)
+                                        except OSError:
+                                            pass
+                                    try:
+                                        os.unlink(full_meta)
+                                    except OSError:
+                                        pass
+                                    purged += 1
+                            except OSError:
+                                pass
+            except Exception:
+                pass
+
+        return purged
 
     def refresh_roots(self) -> List[Dict[str, Any]]:
         """Dynamically detect active mount points."""
@@ -153,18 +350,45 @@ class FileManagerBackend:
                 })
         return detected
 
-    def validate_safe_path(self, target_path: str, allow_symlinks_in_leaf: bool = False) -> str:
+    def validate_safe_path(
+        self,
+        target_path: str,
+        allow_symlinks_in_leaf: bool = False,
+        is_write_operation: bool = False
+    ) -> str:
         """
         Anti-Path-Traversal and Anti-Symlink Bypass Validator.
-        Checks that target resolves strictly inside one of the allowed roots.
+        Complemented for write operations: rigorously verifies parent directory,
+        rejects symlinks in ancestor paths, and eliminates TOCTOU vulnerabilities.
         """
         if not target_path:
             raise PermissionError("Empty target path")
 
-        canonical_target = os.path.realpath(target_path)
+        target_path = target_path.strip()
+        if "\0" in target_path:
+            raise ValueError("Null byte injection detected")
 
-        # Prevent symlink attacks on destructive operations
-        if not allow_symlinks_in_leaf and os.path.islink(target_path):
+        # For write/create operations (where leaf file may not exist yet)
+        if is_write_operation:
+            clean_leaf = os.path.basename(target_path)
+            if not clean_leaf or clean_leaf in (".", "..") or "/" in clean_leaf or "\\" in clean_leaf:
+                raise ValueError(f"Invalid target name: '{clean_leaf}'")
+
+            parent_dir = os.path.dirname(target_path) or "."
+            # Validate parent directory recursively
+            canonical_parent = self.validate_safe_path(parent_dir, allow_symlinks_in_leaf=False, is_write_operation=False)
+
+            if not os.path.isdir(canonical_parent):
+                raise NotADirectoryError(f"Parent directory '{parent_dir}' is not a directory")
+            if os.path.islink(canonical_parent):
+                raise PermissionError(f"Parent directory '{canonical_parent}' is a symlink")
+
+            canonical_target = os.path.join(canonical_parent, clean_leaf)
+        else:
+            canonical_target = os.path.realpath(target_path)
+
+        # Prevent symlink attacks on mutating operations
+        if not allow_symlinks_in_leaf and (os.path.islink(target_path) or os.path.islink(canonical_target)):
             raise PermissionError("Symbolic links are forbidden for mutating operations")
 
         is_safe = False
@@ -245,12 +469,11 @@ class FileManagerBackend:
         }
 
     def make_directory(self, parent_dir: str, name: str) -> str:
-        # Sanitize name
         clean_name = os.path.basename(name.strip())
-        if not clean_name or clean_name in (".", ".."):
+        if not clean_name or clean_name in (".", "..") or "/" in clean_name or "\\" in clean_name:
             raise ValueError("Invalid directory name")
         target = os.path.join(parent_dir, clean_name)
-        safe_path = self.validate_safe_path(target)
+        safe_path = self.validate_safe_path(target, is_write_operation=True)
         if os.path.exists(safe_path):
             raise FileExistsError("Directory already exists")
         os.makedirs(safe_path, exist_ok=False)
@@ -258,18 +481,18 @@ class FileManagerBackend:
 
     def rename_item(self, old_path: str, new_name: str) -> str:
         clean_name = os.path.basename(new_name.strip())
-        if not clean_name or clean_name in (".", ".."):
+        if not clean_name or clean_name in (".", "..") or "/" in clean_name or "\\" in clean_name:
             raise ValueError("Invalid target name")
         safe_old = self.validate_safe_path(old_path)
         if not os.path.exists(safe_old):
             raise FileNotFoundError("Source item does not exist")
 
         target = os.path.join(os.path.dirname(safe_old), clean_name)
-        safe_new = self.validate_safe_path(target)
+        safe_new = self.validate_safe_path(target, is_write_operation=True)
         if os.path.exists(safe_new):
             raise FileExistsError("An item with the destination name already exists")
 
-        os.rename(safe_old, safe_new)
+        os.replace(safe_old, safe_new)
         return safe_new
 
     def delete_items(self, paths: List[str]) -> Dict[str, Any]:
@@ -299,7 +522,7 @@ class FileManagerBackend:
             try:
                 safe_src = self.validate_safe_path(s)
                 dest_file = os.path.join(safe_dest, os.path.basename(safe_src))
-                self.validate_safe_path(dest_file)
+                self.validate_safe_path(dest_file, is_write_operation=True)
                 if os.path.exists(dest_file):
                     results["errors"].append({"path": s, "error": "Destination file already exists"})
                     continue
@@ -319,7 +542,7 @@ class FileManagerBackend:
             try:
                 safe_src = self.validate_safe_path(s)
                 dest_file = os.path.join(safe_dest, os.path.basename(safe_src))
-                self.validate_safe_path(dest_file)
+                self.validate_safe_path(dest_file, is_write_operation=True)
                 if os.path.exists(dest_file):
                     results["errors"].append({"path": s, "error": "Destination file already exists"})
                     continue
@@ -441,17 +664,19 @@ def make_request_handler(backend: FileManagerBackend):
             # 5. Upload Status / Resume Query
             if path == "/api/upload/status":
                 upload_id = query.get("id", [""])[0]
-                session = backend.upload_sessions.get(upload_id)
+                session = backend.get_session(upload_id)
                 if not session:
                     self.send_error_json(404, "Upload session not found or expired")
                     return
                 self.send_json(200, {
                     "success": True,
                     "upload_id": session.upload_id,
-                    "filename": session.filename,
+                    "filename": session.original_filename,
                     "total_size": session.total_size,
                     "received_bytes": session.received_bytes,
-                    "received_chunks": session.received_chunks
+                    "received_chunks": session.received_chunks,
+                    "created_at": session.created_at,
+                    "last_activity": session.last_activity
                 })
                 return
 
@@ -594,34 +819,55 @@ def make_request_handler(backend: FileManagerBackend):
                     self.send_error_json(400, str(e))
                 return
 
-            # 6. Upload Initialization (Generates Secure Server-side Upload Session)
+            # 6. Upload Initialization (Generates Secure Server-side Upload Session with Resume Support)
             if path == "/api/upload/init":
                 try:
                     payload = read_json_body()
                     filename = os.path.basename(payload.get("filename", "").strip())
                     target_dir = payload.get("target_dir", "")
                     total_size = int(payload.get("total_size", 0))
+                    expected_hash = payload.get("expected_hash")
+                    client_upload_id = payload.get("upload_id") or payload.get("resume_id")
 
                     if not filename:
                         raise ValueError("Filename is required")
 
-                    safe_target = backend.validate_safe_path(target_dir)
+                    safe_target = backend.validate_safe_path(target_dir, is_write_operation=False)
                     if not os.path.isdir(safe_target):
                         raise NotADirectoryError(f"Target '{target_dir}' is not a directory")
 
+                    # Check if client requested resuming an existing session
+                    if client_upload_id:
+                        existing = backend.get_session(client_upload_id)
+                        if existing and existing.original_filename == filename and existing.target_dir == safe_target:
+                            self.send_json(200, {
+                                "success": True,
+                                "resumed": True,
+                                "upload_id": existing.upload_id,
+                                "filename": existing.original_filename,
+                                "part_path": existing.part_path,
+                                "received_bytes": existing.received_bytes,
+                                "total_size": existing.total_size,
+                                "received_chunks": existing.received_chunks,
+                                "chunk_size": CHUNK_SIZE_DEFAULT
+                            })
+                            return
+
                     # Generate cryptographically secure upload session ID
-                    upload_id = secrets.token_hex(12)
+                    upload_id = secrets.token_hex(16)
                     session = UploadSession(
                         upload_id=upload_id,
                         filename=filename,
                         target_dir=safe_target,
                         total_size=total_size,
-                        token=backend.auth_token
+                        token=backend.auth_token,
+                        expected_hash=expected_hash
                     )
                     backend.upload_sessions[upload_id] = session
 
                     self.send_json(200, {
                         "success": True,
+                        "resumed": False,
                         "upload_id": upload_id,
                         "filename": filename,
                         "part_path": session.part_path,
@@ -638,7 +884,7 @@ def make_request_handler(backend: FileManagerBackend):
                 chunk_index_header = self.headers.get("X-Chunk-Index", "0")
                 offset_header = self.headers.get("X-Chunk-Offset", "0")
 
-                session = backend.upload_sessions.get(upload_id)
+                session = backend.get_session(upload_id) if upload_id else None
                 if not session:
                     self.send_error_json(404, "Invalid or expired upload session")
                     return
@@ -664,13 +910,29 @@ def make_request_handler(backend: FileManagerBackend):
                 try:
                     payload = read_json_body()
                     upload_id = payload.get("upload_id")
-                    session = backend.upload_sessions.get(upload_id)
+                    session = backend.get_session(upload_id) if upload_id else None
                     if not session:
-                        raise ValueError("Upload session not found")
+                        raise ValueError("Upload session not found or expired")
 
                     final_path = session.finalize()
-                    del backend.upload_sessions[upload_id]
+                    if upload_id in backend.upload_sessions:
+                        del backend.upload_sessions[upload_id]
                     self.send_json(200, {"success": True, "saved_path": final_path})
+                except Exception as e:
+                    self.send_error_json(400, str(e))
+                return
+
+            # 9. Upload Cancel / Purge
+            if path == "/api/upload/cancel":
+                try:
+                    payload = read_json_body()
+                    upload_id = payload.get("upload_id")
+                    session = backend.get_session(upload_id) if upload_id else None
+                    if session:
+                        session.cancel()
+                        if upload_id in backend.upload_sessions:
+                            del backend.upload_sessions[upload_id]
+                    self.send_json(200, {"success": True, "message": "Upload session cancelled and cleaned up"})
                 except Exception as e:
                     self.send_error_json(400, str(e))
                 return

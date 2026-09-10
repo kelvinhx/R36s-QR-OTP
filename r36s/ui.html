@@ -849,13 +849,18 @@
 
       async function uploadSingleFile(file, index, total) {
         progressPanel.style.display = "block";
-        progressTitle.textContent = `[${index}/${total}] Enviando ${file.name}...`;
+        progressTitle.textContent = `[${index}/${total}] Preparando ${file.name}...`;
 
-        // 1. Handshake: Init session on server
+        // Check if there is an active resumable upload session in localStorage
+        const resumeStorageKey = `r36s_upload_${currentPath}_${file.name}_${file.size}`;
+        const existingSessionId = localStorage.getItem(resumeStorageKey);
+
+        // 1. Handshake: Init or resume session on server
         const initResp = await apiRequest('/api/upload/init', 'POST', {
           filename: file.name,
           target_dir: currentPath,
-          total_size: file.size
+          total_size: file.size,
+          resume_id: existingSessionId || undefined
         });
         const initData = await initResp.json();
         if (!initData.success) {
@@ -864,9 +869,17 @@
         }
 
         const uploadId = initData.upload_id;
+        localStorage.setItem(resumeStorageKey, uploadId);
+
         const chunkSize = initData.chunk_size || (2 * 1024 * 1024);
         let offset = initData.received_bytes || 0;
         let chunkIndex = Math.floor(offset / chunkSize);
+
+        if (initData.resumed && offset > 0) {
+          progressTitle.textContent = `[${index}/${total}] Retomando ${file.name} de ${formatSize(offset)}...`;
+        } else {
+          progressTitle.textContent = `[${index}/${total}] Enviando ${file.name}...`;
+        }
 
         const startTime = Date.now();
         let bytesUploadedSinceStart = 0;
@@ -913,6 +926,8 @@
         const compData = await compResp.json();
         if (!compData.success) {
           alert(`Erro na finalização: ${compData.error}`);
+        } else {
+          localStorage.removeItem(resumeStorageKey);
         }
       }
 
