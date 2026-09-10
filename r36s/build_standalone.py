@@ -160,33 +160,19 @@ fi
 echo ">> IP Local: $LOCAL_IP"
 
 # ------------------------------------------------------------------------------
-# 5. SELECAO DINAMICA DE PORTA LIVRE (8080..8090)
+# 5. GERACAO DO TOKEN CRIPTOGRAFICO EFEMERO (Zero Fallback Previsivel)
 # ------------------------------------------------------------------------------
-PORT=""
-for p in {{8080..8090}}; do
-    if ! "$PYTHON_BIN" -c "import socket; s = socket.socket(); s.bind(('0.0.0.0', $p)); s.close()" 2>/dev/null; then
-        continue
-    fi
-    PORT="$p"
-    break
-done
-
-if [[ -z "$PORT" ]]; then
-    echo "ERRO: Nenhuma porta disponivel na faixa 8080-8090."
+AUTH_TOKEN=$("$PYTHON_BIN" -c "import secrets; print(secrets.token_hex(16))" 2>/dev/null || true)
+if [[ -z "$AUTH_TOKEN" ]] || [[ ${{#AUTH_TOKEN}} -lt 32 ]]; then
+    echo "ERRO CRITICO DE SEGURANCA: Falha ao gerar token criptografico aleatorio."
+    echo "O dArkOS RE requer gerador seguro (secrets.token_hex). Abortando."
     exit 1
 fi
 
-echo ">> Porta de servico selecionada: $PORT"
-
 # ------------------------------------------------------------------------------
-# 6. GERACAO DO TOKEN EFEMERO DE AUTENTICACAO
+# 6. SELECAO DINAMICA DE PORTA (8080..8090) & INICIALIZACAO COM HEALTH CHECK REAL
 # ------------------------------------------------------------------------------
-AUTH_TOKEN=$("$PYTHON_BIN" -c "import secrets; print(secrets.token_hex(16))")
-
-# ------------------------------------------------------------------------------
-# 7. INICIALIZACAO DO BACKEND & HEALTH CHECK HTTP REAL
-# ------------------------------------------------------------------------------
-echo ">> Iniciando servidor web..."
+echo ">> Alocando porta dinamica de servico (8080-8090) e validando HTTP..."
 
 # Identificar raizes validas no R36S
 STORAGE_ROOTS=()
@@ -195,55 +181,75 @@ for r in "/roms" "/roms2" "/media" "/mnt"; do
         STORAGE_ROOTS+=("$r")
     fi
 done
-
 if [[ ${{#STORAGE_ROOTS[@]}} -eq 0 ]]; then
     STORAGE_ROOTS=("/roms")
 fi
 
-"$PYTHON_BIN" "$APP_DIR/server.py" \\
-    --port "$PORT" \\
-    --token "$AUTH_TOKEN" \\
-    --ui "$APP_DIR/ui.html" \\
-    --roots "${{STORAGE_ROOTS[@]}}" > "$APP_DIR/server.log" 2>&1 &
-SERVER_PID=$!
-
-echo ">> Aguardando inicializacao e confirmacao HTTP..."
-
-# Health check real via HTTP GET /api/status com o token
+PORT=""
+SERVER_PID=""
 HEALTHY=0
-for i in {{1..15}}; do
-    if kill -0 "$SERVER_PID" 2>/dev/null; then
+
+for p in {{8080..8090}}; do
+    # 1. Checa disponibilidade preliminar de socket
+    if ! "$PYTHON_BIN" -c "import socket; s = socket.socket(); s.bind(('0.0.0.0', $p)); s.close()" 2>/dev/null; then
+        echo "   [Porta $p em uso, testando proxima...]"
+        continue
+    fi
+
+    # 2. Inicia servidor na porta candidata
+    "$PYTHON_BIN" "$APP_DIR/server.py" \\
+        --port "$p" \\
+        --token "$AUTH_TOKEN" \\
+        --ui "$APP_DIR/ui.html" \\
+        --roots "${{STORAGE_ROOTS[@]}}" > "$APP_DIR/server.log" 2>&1 &
+    CANDIDATE_PID=$!
+
+    # 3. Health check HTTP real via GET /api/status?token=...
+    IS_OK=0
+    for attempt in {{1..15}}; do
+        if ! kill -0 "$CANDIDATE_PID" 2>/dev/null; then
+            break
+        fi
         RESP=$("$PYTHON_BIN" -c "
 import urllib.request, json
 try:
-    req = urllib.request.Request('http://127.0.0.1:$PORT/api/status?token=$AUTH_TOKEN')
-    with urllib.request.urlopen(req, timeout=1) as resp:
+    req = urllib.request.Request('http://127.0.0.1:$p/api/status?token=$AUTH_TOKEN')
+    with urllib.request.urlopen(req, timeout=0.8) as resp:
         data = json.loads(resp.read().decode())
         if data.get('success') is True:
             print('OK')
 except Exception:
     pass
 " 2>/dev/null || true)
-
         if [[ "$RESP" == "OK" ]]; then
-            HEALTHY=1
+            IS_OK=1
             break
         fi
-    else
+        sleep 0.2
+    done
+
+    # 4. Avaliacao do health check
+    if [[ "$IS_OK" -eq 1 ]]; then
+        PORT="$p"
+        SERVER_PID="$CANDIDATE_PID"
+        HEALTHY=1
+        echo ">> Servidor ativo e verificado com sucesso via HTTP na porta $PORT."
         break
+    else
+        kill "$CANDIDATE_PID" 2>/dev/null || true
+        wait "$CANDIDATE_PID" 2>/dev/null || true
     fi
-    sleep 0.3
 done
 
-if [[ "$HEALTHY" -ne 1 ]]; then
-    echo "ERRO: Falha ao iniciar servidor HTTP na porta $PORT."
+if [[ "$HEALTHY" -ne 1 ]] || [[ -z "$PORT" ]]; then
+    echo "ERRO CRITICO: Nenhuma porta disponivel na faixa 8080-8090 respondeu ao health check HTTP."
     if [[ -f "$APP_DIR/server.log" ]]; then
-        echo "Log do servidor:"
-        tail -n 10 "$APP_DIR/server.log"
+        echo "Ultimas linhas do log do servidor:"
+        tail -n 15 "$APP_DIR/server.log"
     fi
     exit 1
 fi
-
+echo "$SERVER_PID" > "$APP_DIR/server.pid" 2>/dev/null || true
 echo ">> Servidor ONLINE e verificado com sucesso!"
 
 # ------------------------------------------------------------------------------

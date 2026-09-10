@@ -18,6 +18,11 @@ import {
   PlayCircle
 } from "lucide-react";
 
+import shRaw from "../r36s/R36S_WebFileManager.sh?raw";
+import pyRaw from "../r36s/server.py?raw";
+import uiRaw from "../r36s/ui.html?raw";
+import gptkRaw from "../r36s/controls.gptk?raw";
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<"overview" | "code" | "preview" | "audit" | "deploy">("overview");
   const [activeFile, setActiveFile] = useState<string>("sh");
@@ -28,217 +33,25 @@ export default function App() {
       name: "R36S_WebFileManager.sh",
       path: "/roms/tools/R36S_WebFileManager.sh",
       language: "bash",
-      content: `#!/bin/bash
-# ==============================================================================
-# R36S Web File Manager + QR Transfer
-# Dispositivo Alvo: R36S Físico (SoC Rockchip RK3326, dArkOS RE, Linux 4.4.189)
-# Autocontido - Zero Dependência Manual Externa
-# ==============================================================================
-
-set -u
-
-SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-TOOL_DIR="/roms/tools/.tools/R36S_WebFileManager"
-
-if [ ! -d "/roms/tools" ]; then
-    TOOL_DIR="$SCRIPT_DIR/.tools/R36S_WebFileManager"
-fi
-
-PID_FILE="$TOOL_DIR/server.pid"
-LOG_FILE="$TOOL_DIR/server.log"
-GPTOKEYB_PID=""
-SERVER_PID=""
-
-cleanup() {
-    trap - EXIT INT TERM
-    echo ""
-    echo "[R36S Web File Manager] Encerrando processos e liberando recursos..."
-
-    if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
-        kill "$SERVER_PID" 2>/dev/null
-        wait "$SERVER_PID" 2>/dev/null || true
-    elif [ -f "$PID_FILE" ]; then
-        PID_FROM_FILE=$(cat "$PID_FILE" 2>/dev/null)
-        if [ -n "$PID_FROM_FILE" ]; then
-            kill "$PID_FROM_FILE" 2>/dev/null
-        fi
-    fi
-
-    # REGRA #5: Encerra estritamente o PID do gptokeyb iniciado por este script
-    if [ -n "$GPTOKEYB_PID" ] && kill -0 "$GPTOKEYB_PID" 2>/dev/null; then
-        kill "$GPTOKEYB_PID" 2>/dev/null
-    fi
-
-    rm -f "$PID_FILE" 2>/dev/null
-
-    if [ -w "/dev/tty1" ]; then
-        reset >/dev/tty1 2>/dev/null || clear >/dev/tty1 2>/dev/null
-    else
-        clear 2>/dev/null || true
-    fi
-
-    exit 0
-}
-
-trap cleanup EXIT INT TERM
-
-# REGRA #1: Detecção de Python 3 em runtime, sem instalações via apt
-if ! command -v python3 >/dev/null 2>&1; then
-    if command -v dialog >/dev/null 2>&1; then
-        dialog --title "R36S Web File Manager" \\
-               --msgbox "ERRO DE AMBIENTE:\\n\\nPython 3 não foi encontrado no dArkOS RE instalado.\\nO sistema não realizará instalações automáticas pela Internet.\\n\\nOperação cancelada." 10 50
-    else
-        echo "========================================================="
-        echo "ERRO DE AMBIENTE: Python 3 não encontrado no dArkOS RE."
-        echo "Nenhuma instalação automática pela Internet será feita."
-        echo "========================================================="
-        sleep 5
-    fi
-    exit 1
-fi
-
-mkdir -p "$TOOL_DIR" 2>/dev/null
-
-# Extrai perfil do gptokeyb
-cat << 'EOF_GPTK' > "$TOOL_DIR/controls.gptk"
-back = esc
-start = enter
-a = enter
-b = esc
-x = r
-y = space
-up = up
-down = down
-left = left
-right = right
-left_analog_up = up
-left_analog_down = down
-left_analog_left = left
-left_analog_right = right
-EOF_GPTK
-
-# Sincroniza arquivos de backend se estiverem presentes no diretório raiz
-if [ -f "$SCRIPT_DIR/server.py" ]; then
-    cp "$SCRIPT_DIR/server.py" "$TOOL_DIR/server.py"
-fi
-if [ -f "$SCRIPT_DIR/ui.html" ]; then
-    cp "$SCRIPT_DIR/ui.html" "$TOOL_DIR/ui.html"
-fi
-
-chmod +x "$TOOL_DIR/server.py" 2>/dev/null || true
-
-get_local_ip() {
-    IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-    if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then echo "$IP"; return 0; fi
-    IP=$(ip route get 1.1.1.1 2>/dev/null | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
-    if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then echo "$IP"; return 0; fi
-    IP=$(ifconfig wlan0 2>/dev/null | grep -i "inet " | awk '{print $2}' | sed 's/addr://')
-    if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then echo "$IP"; return 0; fi
-    echo ""
-}
-
-LOCAL_IP=$(get_local_ip)
-
-if [ -z "$LOCAL_IP" ]; then
-    if command -v dialog >/dev/null 2>&1; then
-        dialog --title "R36S Web File Manager" \\
-               --msgbox "AVISO DE CONECTIVIDADE:\\n\\nNenhuma interface Wi-Fi ativa ou IP local detectado.\\n\\nVerifique o adaptador USB Wi-Fi ou a conexão de rede nas opções do dArkOS RE e tente novamente." 11 52
-    else
-        echo "========================================================="
-        echo "AVISO: Wi-Fi não conectado ou sem IP atribuído."
-        echo "Conecte o adaptador Wi-Fi e reconecte na rede local."
-        echo "========================================================="
-        sleep 5
-    fi
-    exit 1
-fi
-
-PORT=8080
-TOKEN=$(python3 -c "import secrets; print(secrets.token_hex(16))" 2>/dev/null)
-if [ -z "$TOKEN" ]; then TOKEN="r36s_$(date +%s)"; fi
-SERVER_URL="http://\${LOCAL_IP}:\${PORT}/?token=\${TOKEN}"
-
-if command -v gptokeyb >/dev/null 2>&1; then
-    gptokeyb -1 "R36S_WebFileManager" -c "$TOOL_DIR/controls.gptk" >/dev/null 2>&1 &
-    GPTOKEYB_PID=$!
-fi
-
-cd "$TOOL_DIR" || exit 1
-python3 "$TOOL_DIR/server.py" --port "$PORT" --token "$TOKEN" --ui "$TOOL_DIR/ui.html" > "$LOG_FILE" 2>&1 &
-SERVER_PID=$!
-echo "$SERVER_PID" > "$PID_FILE"
-
-sleep 0.5
-if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-    echo "Falha ao iniciar servidor HTTP. Verifique $LOG_FILE"
-    exit 1
-fi
-
-QR_RENDERED=$(python3 -c "import server; print(server.render_ansi_qr('\${SERVER_URL}'))" 2>/dev/null)
-
-render_console() {
-    clear
-    echo "================================================================================"
-    echo "                          R36S WEB FILE MANAGER + QR                            "
-    echo "================================================================================"
-    echo " IP LOCAL : http://\${LOCAL_IP}:\${PORT}"
-    echo " STATUS   : ONLINE (Serviço ativo na rede local)"
-    echo " SESSÃO   : Autenticada via Token Efêmero"
-    echo "--------------------------------------------------------------------------------"
-    echo ""
-    echo "$QR_RENDERED"
-    echo ""
-    echo "--------------------------------------------------------------------------------"
-    echo " Conecte o celular na mesma rede Wi-Fi e escaneie o QR Code acima."
-    echo " [A] Recarregar Status/IP    |    [B] Encerrar Servidor e Sair"
-    echo "================================================================================"
-}
-
-if [ -w "/dev/tty1" ]; then render_console >/dev/tty1; else render_console; fi
-
-while kill -0 "$SERVER_PID" 2>/dev/null; do
-    if read -t 2 -n 1 KEY 2>/dev/null; then
-        case "$KEY" in
-            q|Q|$'\\e') break ;;
-            r|R|$'\\n') render_console >/dev/tty1 2>/dev/null || render_console ;;
-        esac
-    fi
-done
-
-cleanup`
+      content: shRaw
     },
     py: {
       name: "server.py",
       path: "/roms/tools/.tools/R36S_WebFileManager/server.py",
       language: "python",
-      content: `# Backend HTTP Server (Standard Library Python 3, ThreadingHTTPServer, Chunk Handshake & Atomic Rename)
-# Localizado em /r36s/server.py`
+      content: pyRaw
     },
     ui: {
       name: "ui.html",
       path: "/roms/tools/.tools/R36S_WebFileManager/ui.html",
       language: "html",
-      content: `<!-- Interface Web SPA Moderna (HTML5 + CSS + JS Vanilla, Zero Dependências, Offline First) -->
-<!-- Localizado em /r36s/ui.html -->`
+      content: uiRaw
     },
     gptk: {
       name: "controls.gptk",
       path: "/roms/tools/.tools/R36S_WebFileManager/controls.gptk",
       language: "ini",
-      content: `back = esc
-start = enter
-a = enter
-b = esc
-x = r
-y = space
-up = up
-down = down
-left = left
-right = right
-left_analog_up = up
-left_analog_down = down
-left_analog_left = left
-left_analog_right = right`
+      content: gptkRaw
     }
   };
 

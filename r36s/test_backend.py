@@ -397,6 +397,58 @@ def run_audit():
                 move_res.get("success") is True and os.path.isfile(final_moved) and not os.path.exists(copied_file)
             )
 
+        # Test 6.3: Anti-Recursion: Copy/Move folder into itself
+        sub_folder = os.path.join(created, "nested_folder")
+        os.makedirs(sub_folder, exist_ok=True)
+        rec_copy_req = urllib.request.Request(f"{base_url}/api/fs/copy", method="POST")
+        rec_copy_req.add_header("X-Auth-Token", test_token)
+        rec_copy_req.add_header("Content-Type", "application/json")
+        rec_copy_body = json.dumps({"sources": [created], "dest_dir": sub_folder}).encode()
+        with urllib.request.urlopen(rec_copy_req, data=rec_copy_body) as resp:
+            rec_res = json.loads(resp.read().decode())
+            errors = rec_res.get("results", {}).get("errors", [])
+            assert_test(
+                "Filesystem: Bloqueio estrito de cópia de pasta para dentro de si mesma",
+                len(errors) > 0 and "dentro de si mesma" in errors[0].get("error", "")
+            )
+
+        # Test 6.4: CORS validation: host match allowed, malicious origin blocked
+        cors_req_ok = urllib.request.Request(f"{base_url}/api/status")
+        cors_req_ok.add_header("X-Auth-Token", test_token)
+        cors_req_ok.add_header("Origin", f"http://127.0.0.1:{test_port}")
+        with urllib.request.urlopen(cors_req_ok) as resp:
+            cors_val = resp.headers.get("Access-Control-Allow-Origin")
+            assert_test(
+                "Segurança CORS: Permite origem idêntica ao host ou localhost",
+                cors_val == f"http://127.0.0.1:{test_port}"
+            )
+
+        cors_req_bad = urllib.request.Request(f"{base_url}/api/status")
+        cors_req_bad.add_header("X-Auth-Token", test_token)
+        cors_req_bad.add_header("Origin", "http://evil-attacker-site.com")
+        with urllib.request.urlopen(cors_req_bad) as resp:
+            cors_bad_val = resp.headers.get("Access-Control-Allow-Origin")
+            assert_test(
+                "Segurança CORS: Bloqueia origem arbitrária externa (Sem wildcard '*')",
+                cors_bad_val is None or cors_bad_val != "http://evil-attacker-site.com"
+            )
+
+        # Test 6.5: HTTP Range download check
+        range_ticket_req = urllib.request.Request(f"{base_url}/api/download/ticket", method="POST")
+        range_ticket_req.add_header("X-Auth-Token", test_token)
+        range_ticket_req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(range_ticket_req, data=json.dumps({"path": final_moved}).encode()) as resp:
+            r_ticket_data = json.loads(resp.read().decode())
+            range_url = r_ticket_data.get("download_url")
+
+        range_get_req = urllib.request.Request(f"{base_url}{range_url}")
+        range_get_req.add_header("Range", "bytes=0-99")
+        with urllib.request.urlopen(range_get_req) as resp:
+            assert_test(
+                "Download Streaming: Suporte a HTTP Range (206 Partial Content)",
+                resp.status == 206 and len(resp.read()) == 100
+            )
+
         # ----------------------------------------------------------------------
         # 7. ENCERRAMENTO REMOTO SEGURO
         # ----------------------------------------------------------------------

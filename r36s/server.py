@@ -305,13 +305,14 @@ class FileManagerBackend:
     ):
         # Filter strictly for existing directories among candidates
         self.allowed_roots = []
+        cwd_real = os.path.realpath(".")
         for r in allowed_roots:
-            if not r or r == ".":
-                # STRICT RULE: Never allow '.' or current working directory as fallback!
+            if not r or r == "." or r == "/" or r == cwd_real:
+                # STRICT RULE: Never allow '.', '/', or current working directory as fallback!
                 continue
             if os.path.exists(r) and os.path.isdir(r):
                 real_r = os.path.realpath(r)
-                if real_r not in self.allowed_roots:
+                if real_r not in self.allowed_roots and real_r != "/" and real_r != cwd_real:
                     self.allowed_roots.append(real_r)
 
         # Rejection if no valid authorized root exists
@@ -666,7 +667,6 @@ class FileManagerBackend:
         safe_dest = self.validate_safe_path(dest_dir)
         if not os.path.isdir(safe_dest):
             raise NotADirectoryError("Destino não é um diretório válido")
-
         results = {"success": [], "errors": []}
         total = len(sources)
         for idx, s in enumerate(sources):
@@ -674,7 +674,18 @@ class FileManagerBackend:
                 progress_callback(f"Movendo item {idx + 1} de {total}...")
             try:
                 safe_src = self.validate_safe_path(s)
+                if os.path.isdir(safe_src):
+                    try:
+                        rel = os.path.relpath(safe_dest, safe_src)
+                        if rel == "." or not rel.startswith(".."):
+                            results["errors"].append({"path": s, "error": "Não é possível mover uma pasta para dentro de si mesma"})
+                            continue
+                    except ValueError:
+                        pass
                 dest_file = os.path.join(safe_dest, os.path.basename(safe_src))
+                if dest_file == safe_src:
+                    results["errors"].append({"path": s, "error": "Destino é idêntico à origem"})
+                    continue
                 self.validate_safe_path(dest_file, is_write_operation=True)
                 if os.path.exists(dest_file):
                     results["errors"].append({"path": s, "error": "O arquivo de destino já existe"})
@@ -689,7 +700,6 @@ class FileManagerBackend:
         safe_dest = self.validate_safe_path(dest_dir)
         if not os.path.isdir(safe_dest):
             raise NotADirectoryError("Destino não é um diretório válido")
-
         results = {"success": [], "errors": []}
         total = len(sources)
         for idx, s in enumerate(sources):
@@ -697,7 +707,18 @@ class FileManagerBackend:
                 progress_callback(f"Copiando item {idx + 1} de {total}...")
             try:
                 safe_src = self.validate_safe_path(s)
+                if os.path.isdir(safe_src):
+                    try:
+                        rel = os.path.relpath(safe_dest, safe_src)
+                        if rel == "." or not rel.startswith(".."):
+                            results["errors"].append({"path": s, "error": "Não é possível copiar uma pasta para dentro de si mesma"})
+                            continue
+                    except ValueError:
+                        pass
                 dest_file = os.path.join(safe_dest, os.path.basename(safe_src))
+                if dest_file == safe_src:
+                    results["errors"].append({"path": s, "error": "Destino é idêntico à origem"})
+                    continue
                 self.validate_safe_path(dest_file, is_write_operation=True)
                 if os.path.exists(dest_file):
                     results["errors"].append({"path": s, "error": "O arquivo de destino já existe"})
@@ -1354,9 +1375,9 @@ def make_request_handler(backend: FileManagerBackend):
             if path == "/api/shutdown":
                 self.send_json(200, {"success": True, "message": "Servidor encerrando com segurança"})
                 def delayed_kill():
-                    time.sleep(0.5)
-                    os._exit(0)
-                threading.Thread(target=delayed_kill).start()
+                    time.sleep(0.3)
+                    os.kill(os.getpid(), signal.SIGTERM)
+                threading.Thread(target=delayed_kill, daemon=True).start()
                 return
 
             self.send_error_json(404, "Endpoint não encontrado")
