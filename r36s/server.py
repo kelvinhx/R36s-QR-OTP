@@ -847,6 +847,34 @@ def make_request_handler(backend: FileManagerBackend):
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
 
+            # 0. Static Assets (Icons, Branding, Sprites)
+            if path.startswith("/assets/"):
+                asset_rel = path[len("/assets/"):]
+                ui_dir = os.path.dirname(backend.ui_html_path)
+                asset_full = os.path.normpath(os.path.join(ui_dir, "assets", asset_rel))
+                if not asset_full.startswith(os.path.realpath(os.path.join(ui_dir, "assets"))) or not os.path.isfile(asset_full):
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                ct = "application/octet-stream"
+                if asset_full.endswith(".svg"):
+                    ct = "image/svg+xml"
+                elif asset_full.endswith(".png"):
+                    ct = "image/png"
+                elif asset_full.endswith(".css"):
+                    ct = "text/css"
+                elif asset_full.endswith(".js"):
+                    ct = "application/javascript"
+                
+                with open(asset_full, "rb") as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", ct)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+
             # 1. UI SPA Landing (Token authenticated via query or header)
             if path in ("/", "/index.html"):
                 if not self.check_master_auth():

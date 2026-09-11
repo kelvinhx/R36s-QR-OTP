@@ -488,9 +488,9 @@
   <!-- Header -->
   <header>
     <div class="brand">
-      <div class="brand-icon">🎮</div>
-      <span>R36S Files</span>
-      <span class="brand-badge">iOS Liquid Glass</span>
+      <div class="brand-icon"><img src="/assets/branding/logo_main.svg" width="22" height="22"></div>
+      <span>R36S File Manager</span>
+      <span class="brand-badge">dArkOS RE</span>
     </div>
     <div class="header-actions">
       <button class="btn" id="btnNewFolder" title="Criar Nova Pasta">
@@ -653,11 +653,33 @@
       };
 
       function getFileIcon(name, isDir) {
-        if (isDir) return { icon: '📁', class: 'icon-folder' };
+        if (isDir) {
+          const lower = name.toLowerCase();
+          if (['gba', 'gb', 'snes', 'nes', 'n64', 'nds', 'ps1', 'psp', 'megadrive', 'arcade'].includes(lower)) {
+            return { icon: '<img src="/assets/icons/folder_rom.svg" width="20" height="20">', class: 'icon-folder', badge: lower.toUpperCase() };
+          }
+          return { icon: '<img src="/assets/icons/folder.svg" width="20" height="20">', class: 'icon-folder' };
+        }
         const ext = name.split('.').pop().toLowerCase();
-        if (romExtensions[ext]) return { icon: '🎮', class: 'icon-rom', badge: romExtensions[ext] };
-        if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return { icon: '📦', class: 'icon-archive', badge: ext.toUpperCase() };
-        return { icon: '📄', class: 'icon-file' };
+        if (romExtensions[ext]) {
+          return { icon: '<img src="/assets/icons/file_rom.svg" width="20" height="20">', class: 'icon-rom', badge: romExtensions[ext] };
+        }
+        if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+          return { icon: '<img src="/assets/icons/file_zip.svg" width="20" height="20">', class: 'icon-archive', badge: ext.toUpperCase() };
+        }
+        if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+          return { icon: '<img src="/assets/icons/file_image.svg" width="20" height="20">', class: 'icon-image' };
+        }
+        if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) {
+          return { icon: '<img src="/assets/icons/file_audio.svg" width="20" height="20">', class: 'icon-audio' };
+        }
+        if (['mp4', 'mkv', 'avi', 'webm'].includes(ext)) {
+          return { icon: '<img src="/assets/icons/file_video.svg" width="20" height="20">', class: 'icon-video' };
+        }
+        if (['txt', 'log', 'cfg', 'ini', 'gptk'].includes(ext)) {
+          return { icon: '<img src="/assets/icons/file_text.svg" width="20" height="20">', class: 'icon-text' };
+        }
+        return { icon: '<img src="/assets/icons/file_generic.svg" width="20" height="20">', class: 'icon-file' };
       }
 
       // Load Storage Roots
@@ -683,7 +705,7 @@
         storageRoots.forEach(root => {
           const pill = document.createElement('div');
           pill.className = `storage-pill ${currentPath.startsWith(root.path) ? 'active' : ''}`;
-          pill.innerHTML = `<span>💾</span> <strong>${root.name || root.path}</strong> <span style="opacity: 0.6; font-size: 0.75rem;">(${formatSize(root.free_space)} livres)</span>`;
+          pill.innerHTML = `<img src="/assets/storage/sd.svg" width="16" height="16" style="vertical-align: middle; margin-right: 6px;"> <strong>${root.name || root.path}</strong> <span style="opacity: 0.6; font-size: 0.75rem;">(${formatSize(root.free_space)} livres)</span>`;
           pill.onclick = () => {
             currentPath = root.path;
             selectedPaths.clear();
