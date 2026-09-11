@@ -6,6 +6,7 @@ Zero external dependencies (Python 3 standard library only).
 
 import os
 import sys
+import signal
 import json
 import time
 import socket
