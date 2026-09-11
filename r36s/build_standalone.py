@@ -221,8 +221,14 @@ if not ip:
 print(ip)
 ")
 
-if [[ -z "$LOCAL_IP" ]]; then
-    LOCAL_IP="127.0.0.1"
+if [[ -z "$LOCAL_IP" ]] || [[ "$LOCAL_IP" =~ ^127\. ]] || [[ "$LOCAL_IP" =~ ^169\.254\. ]] || [[ "$LOCAL_IP" == "0.0.0.0" ]]; then
+    echo ""
+    echo "========================================================"
+    echo "  ERRO DE REDE: Wi-Fi / Rede não disponível             "
+    echo "  Conecte o R36S a uma rede Wi-Fi e tente novamente.    "
+    echo "========================================================"
+    echo ""
+    exit 1
 fi
 echo ">> IP Local: $LOCAL_IP"
 

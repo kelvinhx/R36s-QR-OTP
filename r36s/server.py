@@ -912,8 +912,8 @@ def make_request_handler(backend: FileManagerBackend):
                 is_temp_zip = ticket["is_temp_zip"]
 
                 try:
-                    safe_path = backend.validate_safe_path(file_path, allow_symlinks_in_leaf=True)
-                    if not os.path.isfile(safe_path):
+                    safe_path = backend.validate_safe_path(file_path, allow_symlinks_in_leaf=False)
+                    if not os.path.isfile(safe_path) or os.path.islink(safe_path):
                         self.send_error_json(404, "Arquivo não encontrado")
                         return
 
@@ -987,8 +987,8 @@ def make_request_handler(backend: FileManagerBackend):
                 query = urllib.parse.parse_qs(parsed.query)
                 file_path = query.get("path", [""])[0]
                 try:
-                    safe_path = backend.validate_safe_path(file_path, allow_symlinks_in_leaf=True)
-                    if not os.path.isfile(safe_path):
+                    safe_path = backend.validate_safe_path(file_path, allow_symlinks_in_leaf=False)
+                    if not os.path.isfile(safe_path) or os.path.islink(safe_path):
                         self.send_error_json(404, "Arquivo não encontrado")
                         return
 
