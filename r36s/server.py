@@ -1644,6 +1644,43 @@ def render_ansi_qr(text: str) -> str:
         return f"[ URL: {text} ]"
 
 
+def get_ip():
+    import socket
+    import subprocess
+    try:
+        addrs = subprocess.check_output(['ip', '-4', '-o', 'addr', 'show']).decode()
+        candidates = []
+        for line in addrs.splitlines():
+            parts = line.split()
+            if len(parts) >= 4 and parts[2] == 'inet':
+                dev = parts[1]
+                ip = parts[3].split('/')[0]
+                if dev.startswith('lo') or dev.startswith('docker') or dev.startswith('veth') or dev.startswith('br-') or dev.startswith('virbr') or dev.startswith('tap') or dev.startswith('tun'):
+                    continue
+                if ip.startswith('127.') or ip.startswith('169.254.') or ip == '0.0.0.0':
+                    continue
+                prio = 1
+                if dev.startswith('wlan'):
+                    prio = 3
+                elif dev.startswith('eth') or dev.startswith('en'):
+                    prio = 2
+                candidates.append((prio, ip))
+        if candidates:
+            candidates.sort(reverse=True)
+            return candidates[0][1]
+    except Exception:
+        pass
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None):
+            ip = info[4][0]
+            if ip and not ip.startswith('127.') and not ip.startswith('169.254.') and ip != '0.0.0.0' and ':' not in ip:
+                return ip
+    except Exception:
+        pass
+    return ''
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="R36S Web File Manager Backend")
@@ -1661,6 +1698,7 @@ def main():
 
     handler = make_request_handler(backend)
     server_address = ("0.0.0.0", args.port)
+    ThreadingHTTPServer.allow_reuse_address = True
     httpd = ThreadingHTTPServer(server_address, handler)
     print(f"R36S Backend started on port {args.port} with token {args.token}")
     try:

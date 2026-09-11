@@ -189,41 +189,9 @@ chmod +x "$APP_DIR/server.py"
 echo ">> Detectando endereço de rede local do console..."
 LOCAL_IP=""
 LOCAL_IP=$("$PYTHON_BIN" -c "
-import socket, subprocess
-def get_ip():
-    try:
-        addrs = subprocess.check_output(['ip', '-4', '-o', 'addr', 'show']).decode()
-        candidates = []
-        for line in addrs.splitlines():
-            parts = line.split()
-            if len(parts) >= 4:
-                dev = parts[1]
-                ip = parts[3].split('/')[0]
-                if dev.startswith('lo') or dev.startswith('docker') or dev.startswith('veth') or dev.startswith('br-'):
-                    continue
-                if ip.startswith('127.') or ip.startswith('169.254.') or ip == '0.0.0.0':
-                    continue
-                prio = 1
-                if dev.startswith('wlan'):
-                    prio = 3
-                elif dev.startswith('eth') or dev.startswith('en'):
-                    prio = 2
-                candidates.append((prio, ip))
-        if candidates:
-            candidates.sort(reverse=True)
-            return candidates[0][1]
-    except Exception:
-        pass
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(('8.8.8.8', 80))
-        ip = s.getsockname()[0]
-        s.close()
-        if ip and not ip.startswith('127.') and not ip.startswith('169.254.') and ip != '0.0.0.0':
-            return ip
-    except Exception:
-        pass
-    return ''
+import sys
+sys.path.insert(0, '$APP_DIR')
+from server import get_ip
 print(get_ip())
 ")
 
