@@ -7,9 +7,9 @@
   <style>
     :root {
       --bg: #08070b;
-      --surface: rgba(22, 21, 32, 0.75);
+      --surface: rgba(22, 21, 32, 0.85);
       --surface-solid: #161520;
-      --surface-hover: rgba(41, 39, 58, 0.85);
+      --surface-hover: rgba(41, 39, 58, 0.95);
       --border: rgba(255, 255, 255, 0.08);
       --primary: #8b5cf6;
       --primary-hover: #7c3aed;
@@ -22,7 +22,18 @@
       --radius: 12px;
       --radius-sm: 8px;
       --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-      --glass-blur: blur(16px);
+      --glass-blur: blur(8px); /* Optimized for RK3326 / Mali-G31 GPU fill-rate */
+    }
+
+    /* RK3326 / R36S Hardware Acceleration & Performance Hardening */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+    }
+    @supports not (backdrop-filter: blur(8px)) {
+      :root { --surface: #161520; --surface-hover: #211f30; }
+    }
+    @media (max-width: 768px) {
+      :root { --glass-blur: blur(4px); } /* Lighter blur on mobile/console */
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,9 +45,7 @@
       display: flex;
       flex-direction: column;
       overflow-x: hidden;
-      background-image: radial-gradient(circle at 15% 15%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
-                        radial-gradient(circle at 85% 85%, rgba(56, 189, 248, 0.06) 0%, transparent 40%);
-      background-attachment: fixed;
+      transform: translateZ(0); /* Promote body layer */
     }
 
     /* Glass Header */
@@ -52,6 +61,8 @@
       position: sticky;
       top: 0;
       z-index: 50;
+      transform: translateZ(0);
+      will-change: transform;
     }
     .brand {
       display: flex;
