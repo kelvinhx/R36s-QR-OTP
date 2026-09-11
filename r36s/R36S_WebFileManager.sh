@@ -226,50 +226,109 @@ fi
 echo "$SERVER_PID" > "$APP_DIR/server.pid" 2>/dev/null || true
 
 # ------------------------------------------------------------------------------
-# 7. MAPEAMENTO GPTOKEYB COM DETECÇÃO E RELATÓRIO DE FALHA
+# 7. MAPEAMENTO GPTOKEYB & LOOP INTERATIVO DIALOG / CONSOLE
 # ------------------------------------------------------------------------------
-if command -v gptokeyb >/dev/null 2>&1; then
-    gptokeyb -c "$APP_DIR/controls.gptk" -1 &
-    GPTOKEYB_PID=$!
-    echo ">> gptokeyb iniciado (PID: $GPTOKEYB_PID)."
-elif [[ -x "/usr/bin/gptokeyb" ]]; then
-    /usr/bin/gptokeyb -c "$APP_DIR/controls.gptk" -1 &
-    GPTOKEYB_PID=$!
-    echo ">> gptokeyb iniciado em /usr/bin/gptokeyb (PID: $GPTOKEYB_PID)."
-else
-    echo "AVISO: gptokeyb não encontrado no sistema. Controles físicos do gamepad desativados (modo web puro)."
-fi
+export TERM=linux
 
-# ------------------------------------------------------------------------------
-# 8. EXIBIÇÃO DO QR CODE & LOOP PRINCIPAL
-# ------------------------------------------------------------------------------
-clear || true
-CONNECT_URL="http://$LOCAL_IP:$PORT/?token=$AUTH_TOKEN"
+if command -v dialog >/dev/null 2>&1; then
+    # Start gptokeyb monitoring "dialog"
+    if command -v gptokeyb >/dev/null 2>&1; then
+        gptokeyb "dialog" -c "$APP_DIR/controls.gptk" &
+        GPTOKEYB_PID=$!
+        echo ">> gptokeyb iniciado para dialog (PID: $GPTOKEYB_PID)."
+    elif [[ -x "/usr/bin/gptokeyb" ]]; then
+        /usr/bin/gptokeyb "dialog" -c "$APP_DIR/controls.gptk" &
+        GPTOKEYB_PID=$!
+        echo ">> gptokeyb iniciado para dialog (PID: $GPTOKEYB_PID)."
+    else
+        echo "AVISO: gptokeyb nao encontrado. Gamepad desativado."
+    fi
 
-echo "========================================================"
-echo "          R36S WEB FILE MANAGER + QR TRANSFER           "
-echo "========================================================"
-echo ""
-echo "  URL: $CONNECT_URL"
-echo ""
+    CONNECT_URL="http://$LOCAL_IP:$PORT/?token=$AUTH_TOKEN"
 
-"$PYTHON_BIN" -c "
+    while kill -0 "$SERVER_PID" 2>/dev/null; do
+        CHOICE=$(dialog --backtitle "R36S Web File Manager (dArkOS RE)"             --title "PAINEL DE CONTROLE"             --cancel-label "Sair"             --menu "Servidor ativo em:
+$CONNECT_URL
+
+Escolha uma opcao:" 15 65 4             1 "Mostrar QR Code (Conectar)"             2 "Status de Rede e Armazenamento"             3 "Visualizar Logs do Servidor"             4 "Desligar e Retornar ao EmulationStation"             3>&1 1>&2 2>&3 || echo "EXIT")
+
+        if [[ "$CHOICE" == "EXIT" ]] || [[ "$CHOICE" == "4" ]]; then
+            if dialog --title "Sair" --yesno "Deseja realmente parar o servidor web e retornar ao EmulationStation?" 8 50; then
+                break
+            fi
+        elif [[ "$CHOICE" == "1" ]]; then
+            clear
+            echo "========================================================"
+            echo "             ESCANEE O QR CODE PARA CONECTAR            "
+            echo "========================================================"
+            echo ""
+            echo "  URL: $CONNECT_URL"
+            echo ""
+            "$PYTHON_BIN" -c "
 import sys
 sys.path.insert(0, '$APP_DIR')
 from server import render_ansi_qr
 print(render_ansi_qr('$CONNECT_URL'))
 "
+            echo ""
+            echo "--------------------------------------------------------"
+            echo " Pressione qualquer tecla ou botao B para voltar ao menu"
+            echo "--------------------------------------------------------"
+            read -n 1 -s -r
+        elif [[ "$CHOICE" == "2" ]]; then
+            ROOTS_STR=""
+            for r in "${STORAGE_ROOTS[@]}"; do
+                ROOTS_STR="$ROOTS_STR  - $r
+"
+            done
+            dialog --title "Rede e Armazenamento"                 --msgbox "IP Local: $LOCAL_IP
+Porta: $PORT
+Token: $AUTH_TOKEN
 
-echo ""
-echo "--------------------------------------------------------"
-echo "  Status: SERVIDOR ATIVO (Porta $PORT)"
-echo "  Pressione B ou START no console para sair e retornar"
-echo "--------------------------------------------------------"
-
-while kill -0 "$SERVER_PID" 2>/dev/null; do
-    if read -t 1 -n 1 KEY 2>/dev/null; then
-        break
+Diretorios de Armazenamento:
+$ROOTS_STR" 15 60
+        elif [[ "$CHOICE" == "3" ]]; then
+            dialog --title "Logs do Servidor (server.log)"                 --textbox "$APP_DIR/server.log" 20 70
+        fi
+    done
+else
+    # Fallback if dialog is not available
+    echo "AVISO: dialog nao encontrado. Iniciando em modo CLI de compatibilidade."
+    if command -v gptokeyb >/dev/null 2>&1; then
+        gptokeyb -c "$APP_DIR/controls.gptk" -1 &
+        GPTOKEYB_PID=$!
+        echo ">> gptokeyb iniciado (PID: $GPTOKEYB_PID)."
+    elif [[ -x "/usr/bin/gptokeyb" ]]; then
+        /usr/bin/gptokeyb -c "$APP_DIR/controls.gptk" -1 &
+        GPTOKEYB_PID=$!
+        echo ">> gptokeyb iniciado em /usr/bin/gptokeyb (PID: $GPTOKEYB_PID)."
     fi
-done
+
+    clear || true
+    CONNECT_URL="http://$LOCAL_IP:$PORT/?token=$AUTH_TOKEN"
+    echo "========================================================"
+    echo "          R36S WEB FILE MANAGER + QR TRANSFER           "
+    echo "========================================================"
+    echo ""
+    echo "  URL: $CONNECT_URL"
+    echo ""
+    "$PYTHON_BIN" -c "
+import sys
+sys.path.insert(0, '$APP_DIR')
+from server import render_ansi_qr
+print(render_ansi_qr('$CONNECT_URL'))
+"
+    echo ""
+    echo "--------------------------------------------------------"
+    echo "  Status: SERVIDOR ATIVO (Porta $PORT)"
+    echo "  Pressione B ou START no console para sair e retornar"
+    echo "--------------------------------------------------------"
+
+    while kill -0 "$SERVER_PID" 2>/dev/null; do
+        if read -t 1 -n 1 KEY 2>/dev/null; then
+            break
+        fi
+    done
+fi
 
 exit 0
