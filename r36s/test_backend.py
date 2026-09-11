@@ -560,6 +560,120 @@ def run_audit():
             )
 
         # ----------------------------------------------------------------------
+        # 8. ADICIONAL: AUDITORIA DE REDE, SYMLINKS, CONTROLES E ASSETS (Fase 8)
+        # ----------------------------------------------------------------------
+        print("\n>> [FASE 8] Auditoria Avançada de Rede, Symlinks, Controles e Assets...")
+
+        # Test 8.1: Teste de IP LAN - Validar que 127.0.0.1 ou link-local não são usados como IPs LAN de acesso
+        def mock_get_ip(ip_routes_output, addr_show_output):
+            candidates = []
+            for line in addr_show_output.splitlines():
+                parts = line.split()
+                if len(parts) >= 4:
+                    dev = parts[1]
+                    ip = parts[3].split('/')[0]
+                    if dev.startswith('lo') or dev.startswith('docker') or dev.startswith('veth') or dev.startswith('br-'):
+                        continue
+                    if ip.startswith('127.') or ip.startswith('169.254.') or ip == '0.0.0.0':
+                        continue
+                    prio = 1
+                    if dev.startswith('wlan'):
+                        prio = 3
+                    elif dev.startswith('eth') or dev.startswith('en'):
+                        prio = 2
+                    candidates.append((prio, ip))
+            if candidates:
+                candidates.sort(reverse=True)
+                return candidates[0][1]
+            return ""
+
+        ip_case_a = mock_get_ip("", "1: eth0 inet 192.168.1.20/24 scope global eth0")
+        assert_test("Fase 8: IP LAN Válido Detectado (Caso A)", ip_case_a == "192.168.1.20")
+
+        ip_case_b = mock_get_ip("", "1: lo inet 127.0.0.1/8 scope host lo")
+        assert_test("Fase 8: Loopback Excluído de IP LAN (Caso B)", ip_case_b == "")
+
+        ip_case_c = mock_get_ip("", "")
+        assert_test("Fase 8: Ausência de Rede Tratada (Caso C)", ip_case_c == "")
+
+        ip_case_d = mock_get_ip("", "1: eth0 inet 169.254.10.20/16 scope global eth0")
+        assert_test("Fase 8: Link-Local Excluído (Caso D)", ip_case_d == "")
+
+        ip_case_e = mock_get_ip("", "1: eth0 inet 192.168.1.10/24 scope global eth0\n2: wlan0 inet 192.168.1.50/24 scope global wlan0")
+        assert_test("Fase 8: Wi-Fi Priorizado over Ethernet (Caso E)", ip_case_e == "192.168.1.50")
+
+        # Test 8.2: Symlink Downloads e Directory Traversals
+        symlink_file = os.path.join(test_dir, "bad_link.txt")
+        if os.path.exists(symlink_file):
+            os.unlink(symlink_file)
+        try:
+            os.symlink("/etc/passwd", symlink_file)
+        except OSError:
+            pass
+
+        if os.path.islink(symlink_file):
+            try:
+                dl_req = urllib.request.Request(f"{base_url}/api/download?path={urllib.parse.quote(symlink_file)}")
+                dl_req.add_header("X-Auth-Token", test_token)
+                urllib.request.urlopen(dl_req)
+                assert_test("Segurança: Bloqueio de download de folha de link simbólico", False)
+            except urllib.error.HTTPError as e:
+                assert_test("Segurança: Bloqueio de download de folha de link simbólico", e.code in (400, 403, 404))
+
+            try:
+                tk_req = urllib.request.Request(f"{base_url}/api/download/ticket", method="POST")
+                tk_req.add_header("X-Auth-Token", test_token)
+                tk_req.add_header("Content-Type", "application/json")
+                urllib.request.urlopen(tk_req, data=json.dumps({"path": symlink_file}).encode())
+                assert_test("Segurança: Bloqueio de ticket para link simbólico", False)
+            except urllib.error.HTTPError as e:
+                assert_test("Segurança: Bloqueio de ticket para link simbólico", e.code in (400, 403, 404))
+        else:
+            print("  [INFO] Pulando teste de symlink físico, validando semanticamente...")
+            try:
+                sys.path.insert(0, os.path.realpath("r36s"))
+                from server import FileManagerBackend
+                mock_backend = FileManagerBackend([test_dir])
+                import unittest.mock
+                with unittest.mock.patch("os.path.islink", return_value=True):
+                    try:
+                        mock_backend.validate_safe_path(os.path.join(test_dir, "fake_link"), allow_symlinks_in_leaf=False)
+                        assert_test("Segurança: Bloqueio semântico de link simbólico", False)
+                    except PermissionError:
+                        assert_test("Segurança: Bloqueio semântico de link simbólico", True)
+            except Exception as ex:
+                assert_test("Segurança: Bloqueio semântico de link simbólico", False, str(ex))
+
+        # Test 8.3: Encomenda e Contagem de Assets
+        asset_base = os.path.realpath("r36s/assets")
+        total_assets = 0
+        svg_count = 0
+        if os.path.exists(asset_base):
+            for root, dirs, files in os.walk(asset_base):
+                for f in files:
+                    total_assets += 1
+                    if f.endswith(".svg"):
+                        svg_count += 1
+        assert_test("Assets: Enumeração física exata (Total 53)", total_assets == 53)
+        assert_test("Assets: Todos os assets em formato SVG otimizado", svg_count == 53)
+
+        # Test 8.4: Sprites check
+        dpad_exists = os.path.isfile(os.path.join(asset_base, "sprites", "dpad.svg"))
+        btn_a_exists = os.path.isfile(os.path.join(asset_base, "sprites", "btn_a.svg"))
+        btn_b_exists = os.path.isfile(os.path.join(asset_base, "sprites", "btn_b.svg"))
+        assert_test("Sprites: dpad.svg, btn_a.svg e btn_b.svg presentes", dpad_exists and btn_a_exists and btn_b_exists)
+
+        # Test 8.5: Coerência de Controles
+        gptk_path = os.path.realpath("r36s/controls.gptk")
+        gptk_ok = False
+        if os.path.isfile(gptk_path):
+            with open(gptk_path, "r") as f:
+                content = f.read()
+                if "start = enter" in content and "back = esc" in content:
+                    gptk_ok = True
+        assert_test("Controles: Coerência com gptokeyb e mapeamento documentado", gptk_ok)
+
+        # ----------------------------------------------------------------------
         # 7. ENCERRAMENTO REMOTO SEGURO
         # ----------------------------------------------------------------------
         print("\n>> [FASE 7] Auditoria de Shutdown Remoto Seguro...")

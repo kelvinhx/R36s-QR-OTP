@@ -190,35 +190,41 @@ echo ">> Detectando endereço de rede local do console..."
 LOCAL_IP=""
 LOCAL_IP=$("$PYTHON_BIN" -c "
 import socket, subprocess
-ip = ''
-try:
-    routes = subprocess.check_output(['ip', 'route', 'show']).decode()
-    for line in routes.splitlines():
-        if 'default' in line or 'proto kernel' in line:
-            parts = line.split()
-            if 'dev' in parts:
-                dev = parts[parts.index('dev') + 1]
-                addrs = subprocess.check_output(['ip', '-4', '-o', 'addr', 'show', dev]).decode()
-                for a in addrs.splitlines():
-                    ip = a.split()[3].split('/')[0]
-                    break
-            if ip:
-                break
-except Exception:
-    pass
-
-if not ip:
+def get_ip():
     try:
         addrs = subprocess.check_output(['ip', '-4', '-o', 'addr', 'show']).decode()
-        for a in addrs.splitlines():
-            dev = a.split()[1]
-            if not dev.startswith('lo') and not dev.startswith('docker') and not dev.startswith('veth'):
-                ip = a.split()[3].split('/')[0]
-                break
+        candidates = []
+        for line in addrs.splitlines():
+            parts = line.split()
+            if len(parts) >= 4:
+                dev = parts[1]
+                ip = parts[3].split('/')[0]
+                if dev.startswith('lo') or dev.startswith('docker') or dev.startswith('veth') or dev.startswith('br-'):
+                    continue
+                if ip.startswith('127.') or ip.startswith('169.254.') or ip == '0.0.0.0':
+                    continue
+                prio = 1
+                if dev.startswith('wlan'):
+                    prio = 3
+                elif dev.startswith('eth') or dev.startswith('en'):
+                    prio = 2
+                candidates.append((prio, ip))
+        if candidates:
+            candidates.sort(reverse=True)
+            return candidates[0][1]
     except Exception:
         pass
-
-print(ip)
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        if ip and not ip.startswith('127.') and not ip.startswith('169.254.') and ip != '0.0.0.0':
+            return ip
+    except Exception:
+        pass
+    return ''
+print(get_ip())
 ")
 
 if [[ -z "$LOCAL_IP" ]] || [[ "$LOCAL_IP" =~ ^127\. ]] || [[ "$LOCAL_IP" =~ ^169\.254\. ]] || [[ "$LOCAL_IP" == "0.0.0.0" ]]; then

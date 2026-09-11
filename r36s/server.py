@@ -563,7 +563,7 @@ class FileManagerBackend:
         return canonical_target
 
     def list_directory(self, dir_path: str) -> Dict[str, Any]:
-        safe_path = self.validate_safe_path(dir_path, allow_symlinks_in_leaf=True)
+        safe_path = self.validate_safe_path(dir_path, allow_symlinks_in_leaf=False)
         if not os.path.isdir(safe_path):
             raise NotADirectoryError(f"'{dir_path}' não é um diretório")
 
@@ -607,7 +607,7 @@ class FileManagerBackend:
         can_go_up = False
         if parent and parent != safe_path:
             try:
-                self.validate_safe_path(parent, allow_symlinks_in_leaf=True)
+                self.validate_safe_path(parent, allow_symlinks_in_leaf=False)
                 can_go_up = True
             except PermissionError:
                 can_go_up = False
@@ -757,7 +757,7 @@ class FileManagerBackend:
 
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for idx, p in enumerate(paths):
-                safe_p = self.validate_safe_path(p, allow_symlinks_in_leaf=True)
+                safe_p = self.validate_safe_path(p, allow_symlinks_in_leaf=False)
                 if progress_callback:
                     progress_callback(f"Compactando {os.path.basename(safe_p)}...")
 
@@ -953,7 +953,9 @@ def make_request_handler(backend: FileManagerBackend):
                         self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
                     self.end_headers()
 
-                    with open(safe_path, "rb") as f:
+                    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                    fd = os.open(safe_path, flags)
+                    with os.fdopen(fd, "rb") as f:
                         f.seek(start)
                         remaining = content_length
                         chunk_size = 64 * 1024
@@ -1028,7 +1030,9 @@ def make_request_handler(backend: FileManagerBackend):
                         self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
                     self.end_headers()
 
-                    with open(safe_path, "rb") as f:
+                    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                    fd = os.open(safe_path, flags)
+                    with os.fdopen(fd, "rb") as f:
                         f.seek(start)
                         remaining = content_length
                         chunk_size = 64 * 1024
@@ -1276,7 +1280,7 @@ def make_request_handler(backend: FileManagerBackend):
                 try:
                     payload = read_json_body()
                     file_path = payload.get("path")
-                    safe_path = backend.validate_safe_path(file_path, allow_symlinks_in_leaf=True)
+                    safe_path = backend.validate_safe_path(file_path, allow_symlinks_in_leaf=False)
                     if not os.path.isfile(safe_path):
                         raise FileNotFoundError("Arquivo não encontrado")
                     ticket = backend.create_download_ticket(safe_path, is_temp_zip=False)
