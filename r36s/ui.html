@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>R36S Web File Manager</title>
+  <title>R36S Web File Manager • iOS Files</title>
   <style>
     :root {
-      --bg: #0d0c13;
-      --surface: #161520;
-      --surface-hover: #1f1d2c;
-      --border: #282637;
+      --bg: #08070b;
+      --surface: rgba(22, 21, 32, 0.75);
+      --surface-solid: #161520;
+      --surface-hover: rgba(41, 39, 58, 0.85);
+      --border: rgba(255, 255, 255, 0.08);
       --primary: #8b5cf6;
       --primary-hover: #7c3aed;
       --accent: #38bdf8;
@@ -18,24 +19,33 @@
       --danger: #ef4444;
       --danger-hover: #dc2626;
       --success: #10b981;
-      --radius: 8px;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      --glass-blur: blur(16px);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      overflow-x: hidden;
+      background-image: radial-gradient(circle at 15% 15%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
+                        radial-gradient(circle at 85% 85%, rgba(56, 189, 248, 0.06) 0%, transparent 40%);
+      background-attachment: fixed;
     }
 
-    /* Header */
+    /* Glass Header */
     header {
       background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
       border-bottom: 1px solid var(--border);
-      padding: 12px 20px;
+      padding: 14px 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -46,20 +56,33 @@
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       font-weight: 700;
-      font-size: 1.15rem;
+      font-size: 1.2rem;
       letter-spacing: -0.02em;
     }
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #8b5cf6, #38bdf8);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 1rem;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
     .brand-badge {
-      font-size: 0.7rem;
-      background: rgba(139, 92, 246, 0.2);
+      font-size: 0.65rem;
+      background: rgba(139, 92, 246, 0.15);
       color: var(--primary);
-      border: 1px solid rgba(139, 92, 246, 0.4);
-      padding: 2px 6px;
-      border-radius: 4px;
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      padding: 2px 8px;
+      border-radius: 6px;
       font-weight: 600;
       text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
     .header-actions {
       display: flex;
@@ -69,31 +92,35 @@
     /* Buttons */
     .btn {
       background: var(--surface-hover);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
       color: var(--text);
       border: 1px solid var(--border);
-      padding: 7px 14px;
-      border-radius: var(--radius);
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
       font-size: 0.85rem;
       font-weight: 500;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      transition: all 0.15s ease;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       user-select: none;
       white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
-    .btn:hover { background: #29273a; }
-    .btn:active { transform: translateY(1px); }
+    .btn:hover { background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
     .btn-primary {
       background: var(--primary);
-      border-color: var(--primary);
+      border-color: rgba(255,255,255,0.2);
       color: #ffffff;
+      box-shadow: 0 4px 14px rgba(139, 92, 246, 0.4);
     }
     .btn-primary:hover { background: var(--primary-hover); }
     .btn-danger {
       background: rgba(239, 68, 68, 0.15);
-      border-color: rgba(239, 68, 68, 0.4);
+      border-color: rgba(239, 68, 68, 0.3);
       color: var(--danger);
     }
     .btn-danger:hover { background: var(--danger); color: #fff; }
@@ -101,713 +128,736 @@
       opacity: 0.4;
       cursor: not-allowed;
       transform: none !important;
+      box-shadow: none !important;
     }
 
     /* Storage Selector Bar */
     .storage-bar {
-      background: #111019;
+      background: rgba(17, 16, 25, 0.6);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
       border-bottom: 1px solid var(--border);
-      padding: 8px 20px;
+      padding: 12px 24px;
       display: flex;
-      gap: 10px;
+      gap: 12px;
       overflow-x: auto;
+      scrollbar-width: none;
     }
+    .storage-bar::-webkit-scrollbar { display: none; }
     .storage-pill {
       background: var(--surface);
       border: 1px solid var(--border);
       color: var(--text-muted);
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 0.8rem;
+      padding: 8px 16px;
+      border-radius: 16px;
+      font-size: 0.85rem;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 10px;
       white-space: nowrap;
+      transition: all 0.2s;
     }
+    .storage-pill:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
     .storage-pill.active {
       background: rgba(139, 92, 246, 0.15);
       border-color: var(--primary);
       color: var(--text);
       font-weight: 600;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
     }
 
     /* Clipboard Banner */
     .clipboard-bar {
-      background: rgba(56, 189, 248, 0.12);
-      border-bottom: 1px solid rgba(56, 189, 248, 0.3);
-      padding: 8px 20px;
+      background: rgba(56, 189, 248, 0.1);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+      padding: 10px 24px;
       display: none;
       align-items: center;
       justify-content: space-between;
       font-size: 0.85rem;
       color: var(--accent);
+      animation: slideDown 0.3s ease;
     }
-    .clipboard-actions {
-      display: flex;
-      gap: 8px;
+    .clipboard-actions { display: flex; gap: 8px; }
+
+    @keyframes slideDown {
+      from { transform: translateY(-100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
 
-    /* Toolbar */
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1300px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Navigation / Toolbar */
     .toolbar {
-      padding: 12px 20px;
+      background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid var(--border);
+      gap: 16px;
+      box-shadow: var(--shadow);
     }
-    .breadcrumbs {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-      font-size: 0.85rem;
-    }
-    .crumb {
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 3px 6px;
-      border-radius: 4px;
-    }
-    .crumb:hover { background: var(--surface-hover); color: var(--text); }
-    .crumb.current { color: var(--text); font-weight: 600; cursor: default; }
-    .crumb-sep { color: var(--border); }
-
-    .actions-row {
+    .breadcrumb {
       display: flex;
       align-items: center;
       gap: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      overflow-x: auto;
+      max-width: 100%;
+      white-space: nowrap;
+    }
+    .breadcrumb-item {
+      color: var(--text-muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.15s;
+    }
+    .breadcrumb-item:hover { color: var(--accent); }
+    .breadcrumb-item.active { color: var(--text); font-weight: 600; cursor: default; }
+    .breadcrumb-sep { color: var(--text-muted); opacity: 0.5; }
+
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
       flex-wrap: wrap;
     }
     .search-box {
-      background: var(--surface);
+      background: rgba(0, 0, 0, 0.3);
       border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 12px;
-      border-radius: var(--radius);
-      font-size: 0.85rem;
-      outline: none;
-      width: 170px;
-    }
-    .search-box:focus { border-color: var(--primary); }
-
-    /* Main Table */
-    main { flex: 1; padding: 16px 20px; }
-    .file-table-container {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .file-table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 0.85rem;
-    }
-    .file-table th {
-      background: #12111b;
-      padding: 10px 14px;
-      color: var(--text-muted);
-      font-weight: 600;
-      border-bottom: 1px solid var(--border);
-      user-select: none;
-    }
-    .file-table td {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: middle;
-    }
-    .file-table tr:last-child td { border-bottom: none; }
-    .file-table tr:hover td { background: var(--surface-hover); }
-    .file-table tr.selected td { background: rgba(139, 92, 246, 0.1); }
-
-    .checkbox-col { width: 36px; text-align: center; }
-    .item-name {
+      border-radius: var(--radius-sm);
+      padding: 7px 12px;
       display: flex;
       align-items: center;
       gap: 8px;
-      cursor: pointer;
-      font-weight: 500;
-      word-break: break-all;
+      color: var(--text);
+      font-size: 0.85rem;
+      width: 220px;
+      transition: all 0.2s;
     }
-    .item-icon { font-size: 1.15rem; flex-shrink: 0; }
-    .action-icons {
-      display: flex;
-      gap: 4px;
-      justify-content: flex-end;
-    }
-    .icon-btn {
-      background: transparent;
+    .search-box:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2); }
+    .search-box input {
+      background: none;
       border: none;
-      color: var(--text-muted);
-      padding: 4px 6px;
-      border-radius: 4px;
-      cursor: pointer;
+      color: var(--text);
+      outline: none;
+      width: 100%;
+      font-size: 0.85srem;
     }
-    .icon-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
 
-    /* Progress Overlay / Panel */
-    .progress-panel {
+    /* Batch Action Floating Bar */
+    .batch-bar {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 320px;
-      background: #1a1829;
-      border: 1px solid var(--primary);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-      border-radius: var(--radius);
-      padding: 14px;
-      display: none;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: rgba(22, 21, 32, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      border-radius: 40px;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
       z-index: 100;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .batch-bar.visible { transform: translateX(-50%) translateY(0); }
+    .batch-count {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--accent);
+      border-right: 1px solid var(--border);
+      padding-right: 16px;
+    }
+    .batch-buttons { display: flex; gap: 8px; }
+
+    /* File Table Container */
+    .file-container {
+      background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    th {
+      background: rgba(17, 16, 25, 0.5);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 12px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      vertical-align: middle;
+      transition: background 0.15s;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+    tr.selected td { background: rgba(139, 92, 246, 0.12); }
+
+    .file-row { cursor: pointer; }
+    .file-name-cell {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 500;
+    }
+    .file-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .icon-folder { background: rgba(56, 189, 248, 0.15); color: var(--accent); }
+    .icon-rom { background: rgba(139, 92, 246, 0.15); color: var(--primary); }
+    .icon-archive { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .icon-file { background: rgba(148, 146, 166, 0.15); color: var(--text-muted); }
+
+    .rom-badge {
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(139, 92, 246, 0.2);
+      color: #c084fc;
+      border: 1px solid rgba(139, 92, 246, 0.4);
+    }
+
+    .file-meta { color: var(--text-muted); font-size: 0.82rem; }
+    .file-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+    /* Drop Zone & Progress Panel */
+    .drop-zone {
+      border: 2px dashed var(--primary) !important;
+      background: rgba(139, 92, 246, 0.05) !important;
+    }
+    .progress-panel {
+      background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      display: none;
     }
     .progress-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
-      font-size: 0.85rem;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
       font-weight: 600;
     }
-    .progress-bar-bg {
-      background: rgba(255,255,255,0.1);
-      border-radius: 4px;
+    .progress-track {
+      background: rgba(255,255,255,0.06);
       height: 8px;
+      border-radius: 4px;
       overflow: hidden;
       margin-bottom: 8px;
     }
-    .progress-bar-fill {
-      background: var(--primary);
+    .progress-fill {
+      background: linear-gradient(90deg, #8b5cf6, #38bdf8);
       height: 100%;
       width: 0%;
-      transition: width 0.1s ease;
+      transition: width 0.2s ease;
     }
-    .progress-stats {
-      font-size: 0.75rem;
-      color: var(--text-muted);
+    .progress-footer {
       display: flex;
       justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-muted);
     }
 
-    /* Modals */
+    /* Modal Dialogs */
     .modal-overlay {
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.7);
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 16px;
-      z-index: 200;
-    }
-    .modal {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      z-index: 1000;
       padding: 20px;
-      width: 100%;
-      max-width: 420px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
     }
-    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; }
+    .modal-card {
+      background: #181622;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 440px;
+      padding: 28px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.8);
+      animation: modalScale 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modalScale {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .modal-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 10px; }
+    .modal-body { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5; }
     .modal-input {
       width: 100%;
-      background: #111019;
+      background: rgba(0,0,0,0.4);
       border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
       color: var(--text);
-      padding: 10px 12px;
-      border-radius: var(--radius);
-      margin-bottom: 16px;
+      font-size: 1rem;
       outline: none;
+      margin-bottom: 20px;
     }
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-    }
+    .modal-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2); }
+    .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; }
 
-    .drop-zone {
-      border: 2px dashed var(--primary);
-      background: rgba(124, 58, 237, 0.08);
+    /* Empty state */
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .empty-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      header { padding: 10px 16px; }
+      main { padding: 16px; gap: 14px; }
+      .toolbar { padding: 12px; }
+      .search-box { width: 100%; }
+      th:nth-child(3), td:nth-child(3) { display: none; } /* hide date on mobile */
     }
   </style>
 </head>
-<body>
+<body id="dropTarget">
 
   <!-- Header -->
   <header>
     <div class="brand">
-      <span>🎮 R36S File Manager</span>
-      <span class="brand-badge">dArkOS RE</span>
+      <div class="brand-icon">🎮</div>
+      <span>R36S Files</span>
+      <span class="brand-badge">iOS Liquid Glass</span>
     </div>
     <div class="header-actions">
-      <button class="btn" id="btnRefresh" title="Recarregar">🔄 Atualizar</button>
-      <button class="btn btn-danger" id="btnShutdown" title="Encerrar servidor no R36S">⏹ Desconectar</button>
+      <button class="btn" id="btnNewFolder" title="Criar Nova Pasta">
+        <span>📁 Nova Pasta</span>
+      </button>
+      <button class="btn btn-primary" id="btnUpload" title="Enviar Arquivos">
+        <span>📤 Enviar</span>
+      </button>
+      <button class="btn btn-danger" id="btnShutdown" title="Encerrar Servidor">
+        <span>⏹ Sair</span>
+      </button>
     </div>
   </header>
 
-  <!-- Storage Selector -->
-  <div class="storage-bar" id="storageBar"></div>
+  <!-- Storage Selector Bar -->
+  <div class="storage-bar" id="storageBar">
+    <div class="storage-pill active">Carregando volumes...</div>
+  </div>
 
-  <!-- Clipboard Banner (Copy / Move Status) -->
+  <!-- Clipboard Banner -->
   <div class="clipboard-bar" id="clipboardBar">
-    <span id="clipboardInfo">📋 0 itens na área de transferência</span>
+    <span id="clipboardText">1 item na área de transferência</span>
     <div class="clipboard-actions">
-      <button class="btn btn-primary" id="btnPasteHere">📥 Colar Aqui</button>
-      <button class="btn" id="btnClearClipboard">✖ Cancelar</button>
+      <button class="btn btn-primary" id="btnPaste" style="padding: 4px 10px; font-size: 0.75rem;">Colar Aqui</button>
+      <button class="btn" id="btnClearClipboard" style="padding: 4px 10px; font-size: 0.75rem;">Limpar</button>
     </div>
   </div>
 
-  <!-- Toolbar -->
-  <div class="toolbar">
-    <div class="breadcrumbs" id="breadcrumbBar"></div>
-    <div class="actions-row">
-      <input type="text" class="search-box" id="searchInput" placeholder="Filtrar pasta...">
-      <input type="file" id="fileInput" multiple style="display: none;">
-      <button class="btn btn-primary" id="btnUpload">📤 Enviar</button>
-      <button class="btn" id="btnNewFolder">📁 Nova Pasta</button>
-      <button class="btn" id="btnCopySelected" disabled>📋 Copiar</button>
-      <button class="btn" id="btnMoveSelected" disabled>✂ Mover</button>
-      <button class="btn btn-danger" id="btnDeleteSelected" disabled>🗑 Excluir</button>
-      <button class="btn" id="btnDownloadSelected" disabled>⬇ Baixar (ZIP)</button>
-    </div>
-  </div>
-
-  <!-- Main Content -->
+  <!-- Main View -->
   <main>
-    <div class="file-table-container" id="dropTarget">
-      <table class="file-table">
+    <!-- Toolbar & Breadcrumb -->
+    <div class="toolbar">
+      <div class="breadcrumb" id="breadcrumbContainer">
+        <span class="breadcrumb-item active">/</span>
+      </div>
+      <div class="toolbar-actions">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" id="searchInput" placeholder="Pesquisar arquivos...">
+        </div>
+        <button class="btn" id="btnSelectAll" title="Selecionar Todos">✓ Todos</button>
+      </div>
+    </div>
+
+    <!-- Live Transfer Progress Panel -->
+    <div class="progress-panel" id="progressPanel">
+      <div class="progress-header">
+        <span id="progressTitle">Enviando arquivos...</span>
+        <span id="progressPercent">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressBarFill"></div>
+      </div>
+      <div class="progress-footer">
+        <span id="progressBytes">0 MB / 0 MB</span>
+        <span id="progressSpeed">0 KB/s</span>
+      </div>
+    </div>
+
+    <!-- File Table -->
+    <div class="file-container">
+      <table>
         <thead>
           <tr>
-            <th class="checkbox-col"><input type="checkbox" id="selectAll"></th>
+            <th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
             <th>Nome</th>
-            <th style="width: 100px;">Tamanho</th>
-            <th style="width: 150px;">Modificado</th>
-            <th style="width: 110px; text-align: right;">Ações</th>
+            <th style="width: 120px;">Tamanho</th>
+            <th style="width: 160px;">Modificado</th>
+            <th style="width: 140px; text-align: right;">Ações</th>
           </tr>
         </thead>
         <tbody id="fileTableBody">
-          <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">Carregando diretório...</td></tr>
+          <tr>
+            <td colspan="5" class="empty-state">
+              <div class="empty-icon">📂</div>
+              <div>Carregando diretório...</div>
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
   </main>
 
-  <!-- Progress Floating Panel -->
-  <div class="progress-panel" id="progressPanel">
-    <div class="progress-header">
-      <span id="progressTitle">Operação em andamento...</span>
-      <span id="progressPercent">0%</span>
-    </div>
-    <div class="progress-bar-bg">
-      <div class="progress-bar-fill" id="progressBarFill"></div>
-    </div>
-    <div class="progress-stats">
-      <span id="progressBytes">0 MB / 0 MB</span>
-      <span id="progressSpeed">-- KB/s</span>
+  <!-- Batch Floating Action Bar -->
+  <div class="batch-bar" id="batchBar">
+    <div class="batch-count" id="batchCount">0 selecionados</div>
+    <div class="batch-buttons">
+      <button class="btn" id="btnCopySelected">📋 Copiar</button>
+      <button class="btn" id="btnMoveSelected">✂ Mover</button>
+      <button class="btn btn-primary" id="btnDownloadSelected">📦 Baixar ZIP</button>
+      <button class="btn btn-danger" id="btnDeleteSelected">🗑 Excluir</button>
     </div>
   </div>
 
-  <!-- Generic Action Modal -->
+  <!-- Modal Dialog -->
   <div class="modal-overlay" id="modalOverlay">
-    <div class="modal">
-      <h3 class="modal-title" id="modalTitle">Título</h3>
-      <div id="modalBodyText" style="margin-bottom: 12px; font-size: 0.9rem; color: var(--text-muted); display: none;"></div>
+    <div class="modal-card">
+      <div class="modal-title" id="modalTitle">Título</div>
+      <div class="modal-body" id="modalBodyText">Mensagem informativa...</div>
       <input type="text" class="modal-input" id="modalInput" style="display: none;">
-      <div class="modal-actions" id="modalActions">
+      <div class="modal-buttons">
         <button class="btn" id="modalBtnCancel">Cancelar</button>
         <button class="btn btn-primary" id="modalBtnConfirm">Confirmar</button>
       </div>
     </div>
   </div>
 
+  <!-- Hidden File Input -->
+  <input type="file" id="fileInput" multiple style="display: none;">
+
   <script>
     (function() {
-      // 1. Token Handling (Session Storage & Strip from URL to avoid leaking in history)
       const urlParams = new URLSearchParams(window.location.search);
-      let token = urlParams.get('token');
-      if (token) {
-        sessionStorage.setItem('r36s_auth_token', token);
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } else {
-        token = sessionStorage.getItem('r36s_auth_token');
-      }
+      const token = urlParams.get('token') || '';
 
-      if (!token) {
-        document.body.innerHTML = `
-          <div style="padding: 50px; text-align: center;">
-            <h2>Sessão Não Autorizada</h2>
-            <p style="color: #9492a6; margin-top: 12px;">Escaneie o QR Code na tela do console R36S para acessar o gerenciador.</p>
-          </div>
-        `;
-        return;
-      }
-
-      let currentPath = "";
-      let directoryEntries = [];
+      let currentPath = "/roms";
+      let storageRoots = [];
+      let currentFiles = [];
       let selectedPaths = new Set();
-      let activeStorageRoots = [];
       let clipboard = null; // { action: 'copy'|'move', paths: [] }
 
-      // API Helper with authentication headers
-      async function apiRequest(url, method = "GET", body = null) {
+      // API Helper
+      async function apiRequest(endpoint, method = 'GET', data = null) {
         const headers = { 'X-Auth-Token': token };
-        if (body && !(body instanceof FormData)) {
+        const opts = { method, headers };
+        if (data) {
           headers['Content-Type'] = 'application/json';
+          opts.body = JSON.stringify(data);
         }
-        const resp = await fetch(url, {
-          method,
-          headers,
-          body: body && !(body instanceof FormData) ? JSON.stringify(body) : body
-        });
+        const resp = await fetch(endpoint, opts);
         if (resp.status === 401) {
-          sessionStorage.removeItem('r36s_auth_token');
-          alert("Sessão expirada. Escaneie o QR Code novamente.");
-          window.location.reload();
+          alert("Sessão expirada ou Token inválido. Recarregue a página.");
           throw new Error("Unauthorized");
         }
         return resp;
       }
 
+      // Formatters
       function formatSize(bytes) {
-        if (!bytes || bytes === 0) return "0 B";
+        if (bytes === 0 || bytes === undefined) return "0 B";
         const k = 1024;
-        const sizes = ["B", "KB", "MB", "GB", "TB"];
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
       }
 
-      function formatDate(timestamp) {
-        if (!timestamp) return "--";
-        const d = new Date(timestamp * 1000);
-        return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      function formatDate(ts) {
+        if (!ts) return "-";
+        const d = new Date(ts * 1000);
+        return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
       }
+
+      // ROM Extension Recognition
+      const romExtensions = {
+        'gb': 'GB', 'gbc': 'GBC', 'gba': 'GBA', 'nes': 'NES', 'snes': 'SNES',
+        'smc': 'SNES', 'sfc': 'SNES', 'n64': 'N64', 'z64': 'N64', 'v64': 'N64',
+        'ps1': 'PS1', 'iso': 'ISO', 'bin': 'BIN', 'cue': 'CUE', 'psp': 'PSP',
+        'nds': 'NDS', 'gen': 'GEN', 'md': 'MD', 'sms': 'SMS', 'gg': 'GG',
+        'zip': 'ZIP', 'rar': 'RAR', '7z': '7Z', 'gba': 'GBA'
+      };
 
       function getFileIcon(name, isDir) {
-        if (isDir) return "📁";
+        if (isDir) return { icon: '📁', class: 'icon-folder' };
         const ext = name.split('.').pop().toLowerCase();
-        if (['zip', '7z', 'rar', 'tar', 'gz'].includes(ext)) return "📦";
-        if (['sfc', 'smc', 'nes', 'gb', 'gbc', 'gba', 'gen', 'md', 'pbp', 'chd', 'iso', 'cue', 'bin'].includes(ext)) return "🎮";
-        if (['png', 'jpg', 'jpeg', 'bmp', 'webp'].includes(ext)) return "🖼";
-        if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) return "🎵";
-        if (['mp4', 'mkv', 'avi'].includes(ext)) return "🎬";
-        if (['txt', 'cfg', 'ini', 'json', 'sh', 'xml', 'gptk'].includes(ext)) return "📄";
-        return "📄";
+        if (romExtensions[ext]) return { icon: '🎮', class: 'icon-rom', badge: romExtensions[ext] };
+        if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return { icon: '📦', class: 'icon-archive', badge: ext.toUpperCase() };
+        return { icon: '📄', class: 'icon-file' };
       }
 
-      // Storage Roots Loader
+      // Load Storage Roots
       async function loadStorageRoots() {
         try {
           const resp = await apiRequest('/api/storage');
-          const json = await resp.json();
-          if (json.success && json.roots && json.roots.length > 0) {
-            activeStorageRoots = json.roots;
-            renderStoragePills();
-            if (!currentPath) {
-              currentPath = activeStorageRoots[0].path;
+          const data = await resp.json();
+          if (data.success && data.roots) {
+            storageRoots = data.roots;
+            renderStorageBar();
+            if (storageRoots.length > 0 && !currentPath.startsWith(storageRoots[0].path)) {
+              currentPath = storageRoots[0].path;
             }
           }
         } catch (e) {
-          console.error("Erro ao carregar armazenamentos:", e);
+          console.error("Erro ao carregar volumes:", e);
         }
       }
 
-      function renderStoragePills() {
+      function renderStorageBar() {
         const bar = document.getElementById('storageBar');
-        bar.innerHTML = "";
-        activeStorageRoots.forEach(root => {
-          const pill = document.createElement('button');
-          pill.className = 'storage-pill' + (currentPath.startsWith(root.path) ? ' active' : '');
-          pill.innerHTML = `<span>💾</span> <span>${root.display_name}</span> <small style="opacity:0.7">(${formatSize(root.free_bytes)} livres)</small>`;
+        bar.innerHTML = '';
+        storageRoots.forEach(root => {
+          const pill = document.createElement('div');
+          pill.className = `storage-pill ${currentPath.startsWith(root.path) ? 'active' : ''}`;
+          pill.innerHTML = `<span>💾</span> <strong>${root.name || root.path}</strong> <span style="opacity: 0.6; font-size: 0.75rem;">(${formatSize(root.free_space)} livres)</span>`;
           pill.onclick = () => {
             currentPath = root.path;
+            selectedPaths.clear();
             loadDirectory(currentPath);
           };
           bar.appendChild(pill);
         });
       }
 
-      // Directory Loader
+      // Load Directory Listing
       async function loadDirectory(path) {
-        selectedPaths.clear();
-        updateActionButtons();
-        document.getElementById('selectAll').checked = false;
-
-        const tbody = document.getElementById('fileTableBody');
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted); padding: 30px;">Carregando...</td></tr>`;
+        currentPath = path;
+        renderStorageBar();
+        renderBreadcrumb();
 
         try {
           const resp = await apiRequest(`/api/fs/list?path=${encodeURIComponent(path)}`);
-          const json = await resp.json();
-          if (json.success) {
-            currentPath = json.data.current_path;
-            directoryEntries = json.data.entries;
-            renderBreadcrumbs(currentPath);
-            renderStoragePills();
-            filterAndRenderTable();
+          const data = await resp.json();
+          if (data.success) {
+            currentFiles = data.items || [];
+            renderFiles(currentFiles);
           } else {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--danger); padding: 20px;">Erro: ${json.error}</td></tr>`;
+            alert("Erro ao ler diretório: " + (data.error || "Desconhecido"));
           }
         } catch (e) {
-          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--danger); padding: 20px;">Falha de comunicação com o console R36S.</td></tr>`;
+          console.error("Falha ao carregar diretório:", e);
         }
       }
 
-      // Breadcrumb Navigation (Fixed: "Raiz" navigates to storage root, NEVER to /)
-      function renderBreadcrumbs(path) {
-        const bar = document.getElementById('breadcrumbBar');
-        bar.innerHTML = "";
+      function renderBreadcrumb() {
+        const container = document.getElementById('breadcrumbContainer');
+        container.innerHTML = '';
+        const parts = currentPath.split('/').filter(Boolean);
+        
+        let accumulated = '';
+        const rootItem = document.createElement('span');
+        rootItem.className = `breadcrumb-item ${parts.length === 0 ? 'active' : ''}`;
+        rootItem.innerHTML = '🏠 /';
+        rootItem.onclick = () => loadDirectory('/');
+        container.appendChild(rootItem);
 
-        const currentRootObj = activeStorageRoots.find(r => path.startsWith(r.path)) || activeStorageRoots[0];
-        const rootPath = currentRootObj ? currentRootObj.path : path;
-        const rootLabel = currentRootObj ? currentRootObj.display_name : "Armazenamento";
-
-        const rootCrumb = document.createElement('span');
-        rootCrumb.className = 'crumb';
-        rootCrumb.textContent = rootLabel;
-        rootCrumb.onclick = () => loadDirectory(rootPath);
-        bar.appendChild(rootCrumb);
-
-        const relPath = path.startsWith(rootPath) ? path.slice(rootPath.length) : path;
-        const parts = relPath.split('/').filter(Boolean);
-
-        let accumulated = rootPath;
-        parts.forEach((p, idx) => {
-          accumulated += "/" + p;
+        parts.forEach((part, idx) => {
+          accumulated += '/' + part;
+          const targetPath = accumulated;
           const sep = document.createElement('span');
-          sep.className = 'crumb-sep';
-          sep.textContent = "›";
-          bar.appendChild(sep);
+          sep.className = 'breadcrumb-sep';
+          sep.textContent = '›';
+          container.appendChild(sep);
 
-          const crumb = document.createElement('span');
-          const isLast = idx === parts.length - 1;
-          crumb.className = 'crumb' + (isLast ? ' current' : '');
-          crumb.textContent = p;
-          if (!isLast) {
-            const dest = accumulated;
-            crumb.onclick = () => loadDirectory(dest);
+          const item = document.createElement('span');
+          item.className = `breadcrumb-item ${idx === parts.length - 1 ? 'active' : ''}`;
+          item.textContent = part;
+          if (idx < parts.length - 1) {
+            item.onclick = () => loadDirectory(targetPath);
           }
-          bar.appendChild(crumb);
+          container.appendChild(item);
         });
       }
 
-      function filterAndRenderTable() {
-        const term = document.getElementById('searchInput').value.toLowerCase().trim();
+      function renderFiles(files) {
         const tbody = document.getElementById('fileTableBody');
-        tbody.innerHTML = "";
+        tbody.innerHTML = '';
 
-        const filtered = directoryEntries.filter(e => e.name.toLowerCase().includes(term));
-
-        if (filtered.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted); padding: 25px;">Nenhum item encontrado nesta pasta.</td></tr>`;
+        if (files.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="5" class="empty-state">
+                <div class="empty-icon">📭</div>
+                <div>Pasta vazia ou nenhum arquivo encontrado.</div>
+              </td>
+            </tr>
+          `;
+          updateBatchBar();
           return;
         }
 
-        filtered.forEach(entry => {
+        files.forEach(file => {
           const tr = document.createElement('tr');
-          if (selectedPaths.has(entry.path)) tr.classList.add('selected');
+          tr.className = 'file-row';
+          if (selectedPaths.has(file.path)) tr.classList.add('selected');
 
-          const tdCheck = document.createElement('td');
-          tdCheck.className = 'checkbox-col';
-          const chk = document.createElement('input');
-          chk.type = 'checkbox';
-          chk.checked = selectedPaths.has(entry.path);
-          chk.onchange = (e) => {
-            if (e.target.checked) selectedPaths.add(entry.path);
-            else selectedPaths.delete(entry.path);
-            tr.classList.toggle('selected', e.target.checked);
-            updateActionButtons();
+          const iconInfo = getFileIcon(file.name, file.is_dir);
+
+          tr.innerHTML = `
+            <td><input type="checkbox" class="file-checkbox" ${selectedPaths.has(file.path) ? 'checked' : ''}></td>
+            <td>
+              <div class="file-name-cell">
+                <div class="file-icon ${iconInfo.class}">${iconInfo.icon}</div>
+                <div>
+                  <div style="font-weight: 500;">${file.name}</div>
+                  ${iconInfo.badge ? `<span class="rom-badge">${iconInfo.badge}</span>` : ''}
+                </div>
+              </div>
+            </td>
+            <td class="file-meta">${file.is_dir ? '-' : formatSize(file.size)}</td>
+            <td class="file-meta">${formatDate(file.mtime)}</td>
+            <td style="text-align: right;">
+              <div class="file-actions">
+                ${!file.is_dir ? `<button class="btn" title="Baixar" onclick="event.stopPropagation(); downloadFile('${file.path}')">⬇</button>` : ''}
+                <button class="btn" title="Renomear" onclick="event.stopPropagation(); promptRename('${file.path}', '${file.name}')">✏</button>
+                <button class="btn btn-danger" title="Excluir" onclick="event.stopPropagation(); deleteSingle('${file.path}')">🗑</button>
+              </div>
+            </td>
+          `;
+
+          const checkbox = tr.querySelector('.file-checkbox');
+          checkbox.onchange = (e) => {
+            e.stopPropagation();
+            if (checkbox.checked) selectedPaths.add(file.path);
+            else selectedPaths.delete(file.path);
+            tr.classList.toggle('selected', checkbox.checked);
+            updateBatchBar();
           };
-          tdCheck.appendChild(chk);
 
-          const tdName = document.createElement('td');
-          const itemLink = document.createElement('div');
-          itemLink.className = 'item-name';
-          itemLink.innerHTML = `<span class="item-icon">${getFileIcon(entry.name, entry.is_dir)}</span> <span>${entry.name}</span>`;
-          itemLink.onclick = () => {
-            if (entry.is_dir) {
-              loadDirectory(entry.path);
+          tr.onclick = () => {
+            if (file.is_dir) {
+              selectedPaths.clear();
+              loadDirectory(file.path);
             } else {
-              triggerDownload(entry.path);
+              checkbox.checked = !checkbox.checked;
+              if (checkbox.checked) selectedPaths.add(file.path);
+              else selectedPaths.delete(file.path);
+              tr.classList.toggle('selected', checkbox.checked);
+              updateBatchBar();
             }
           };
-          tdName.appendChild(itemLink);
-
-          const tdSize = document.createElement('td');
-          tdSize.className = 'text-muted';
-          tdSize.textContent = entry.is_dir ? "--" : formatSize(entry.size);
-
-          const tdDate = document.createElement('td');
-          tdDate.className = 'text-muted';
-          tdDate.textContent = formatDate(entry.mtime);
-
-          const tdActions = document.createElement('td');
-          tdActions.style.textAlign = "right";
-          const actWrap = document.createElement('div');
-          actWrap.className = 'action-icons';
-
-          if (!entry.is_dir) {
-            const btnDown = document.createElement('button');
-            btnDown.className = 'icon-btn';
-            btnDown.title = 'Baixar';
-            btnDown.textContent = '⬇';
-            btnDown.onclick = (e) => { e.stopPropagation(); triggerDownload(entry.path); };
-            actWrap.appendChild(btnDown);
-          }
-
-          const btnRename = document.createElement('button');
-          btnRename.className = 'icon-btn';
-          btnRename.title = 'Renomear';
-          btnRename.textContent = '✏';
-          btnRename.onclick = (e) => { e.stopPropagation(); promptRename(entry.path, entry.name); };
-          actWrap.appendChild(btnRename);
-
-          tdActions.appendChild(actWrap);
-
-          tr.appendChild(tdCheck);
-          tr.appendChild(tdName);
-          tr.appendChild(tdSize);
-          tr.appendChild(tdDate);
-          tr.appendChild(tdActions);
 
           tbody.appendChild(tr);
         });
+        updateBatchBar();
       }
 
-      function updateActionButtons() {
+      function updateBatchBar() {
+        const bar = document.getElementById('batchBar');
+        const countEl = document.getElementById('batchCount');
         const count = selectedPaths.size;
-        const btnDel = document.getElementById('btnDeleteSelected');
-        const btnZip = document.getElementById('btnDownloadSelected');
-        const btnCopy = document.getElementById('btnCopySelected');
-        const btnMove = document.getElementById('btnMoveSelected');
-
-        btnDel.disabled = count === 0;
-        btnDel.textContent = `🗑 Excluir (${count})`;
-        btnZip.disabled = count === 0;
-        btnCopy.disabled = count === 0;
-        btnMove.disabled = count === 0;
-      }
-
-      function updateClipboardBar() {
-        const bar = document.getElementById('clipboardBar');
-        const info = document.getElementById('clipboardInfo');
-        if (clipboard && clipboard.paths.length > 0) {
-          bar.style.display = 'flex';
-          const act = clipboard.action === 'copy' ? 'Copiar' : 'Mover';
-          info.textContent = `📋 ${clipboard.paths.length} item(ns) na área de transferência (${act})`;
+        if (count > 0) {
+          countEl.textContent = `${count} item(ns) selecionado(s)`;
+          bar.classList.add('visible');
         } else {
-          bar.style.display = 'none';
+          bar.classList.remove('visible');
         }
       }
 
-      // Selection Handlers
-      document.getElementById('selectAll').onchange = (e) => {
-        const check = e.target.checked;
-        directoryEntries.forEach(item => {
-          if (check) selectedPaths.add(item.path);
-          else selectedPaths.delete(item.path);
-        });
-        filterAndRenderTable();
-        updateActionButtons();
-      };
-
-      document.getElementById('searchInput').oninput = filterAndRenderTable;
-      document.getElementById('btnRefresh').onclick = () => loadDirectory(currentPath);
-
-      // Clipboard Actions (Copy / Move / Paste)
-      document.getElementById('btnCopySelected').onclick = () => {
-        if (selectedPaths.size === 0) return;
-        clipboard = { action: 'copy', paths: Array.from(selectedPaths) };
-        updateClipboardBar();
-      };
-
-      document.getElementById('btnMoveSelected').onclick = () => {
-        if (selectedPaths.size === 0) return;
-        clipboard = { action: 'move', paths: Array.from(selectedPaths) };
-        updateClipboardBar();
-      };
-
-      document.getElementById('btnClearClipboard').onclick = () => {
-        clipboard = null;
-        updateClipboardBar();
-      };
-
-      document.getElementById('btnPasteHere').onclick = async () => {
-        if (!clipboard || clipboard.paths.length === 0) return;
-        const action = clipboard.action;
-        const count = clipboard.paths.length;
-        const actionName = action === 'copy' ? 'copiar' : 'mover';
-
-        showProgressModal(`Executando ${actionName}...`, `Processando ${count} item(ns) no R36S...`);
-
-        try {
-          const resp = await apiRequest('/api/tasks/start', 'POST', {
-            action: action,
-            sources: clipboard.paths,
-            dest_dir: currentPath
-          });
-          const json = await resp.json();
-          if (!json.success) {
-            hideProgressModal();
-            alert("Erro ao iniciar operação: " + json.error);
-            return;
-          }
-
-          const taskId = json.task_id;
-          const poll = setInterval(async () => {
-            try {
-              const statResp = await apiRequest(`/api/tasks/status?id=${taskId}`);
-              const statJson = await statResp.json();
-              if (statJson.success) {
-                const task = statJson.task;
-                updateProgressModal(task.progress_text || "Processando...");
-                if (task.status === "completed") {
-                  clearInterval(poll);
-                  hideProgressModal();
-                  if (action === 'move') {
-                    clipboard = null;
-                    updateClipboardBar();
-                  }
-                  loadDirectory(currentPath);
-                } else if (task.status === "failed") {
-                  clearInterval(poll);
-                  hideProgressModal();
-                  alert("Erro: " + (task.error || "Falha na operação"));
-                }
-              }
-            } catch (err) {
-              clearInterval(poll);
-              hideProgressModal();
-            }
-          }, 800);
-        } catch (e) {
-          hideProgressModal();
-          alert("Falha de conexão.");
+      // Search Filter
+      document.getElementById('searchInput').oninput = (e) => {
+        const query = e.target.value.toLowerCase();
+        if (!query) {
+          renderFiles(currentFiles);
+          return;
         }
+        const filtered = currentFiles.filter(f => f.name.toLowerCase().includes(query));
+        renderFiles(filtered);
       };
 
-      // Secure Downloads via Single-Use Ticket (NO master token in URL!)
-      async function triggerDownload(filePath) {
+      // Select All
+      document.getElementById('btnSelectAll').onclick = () => {
+        if (selectedPaths.size === currentFiles.length) {
+          selectedPaths.clear();
+        } else {
+          currentFiles.forEach(f => selectedPaths.add(f.path));
+        }
+        renderFiles(currentFiles);
+      };
+
+      // Download Single
+      window.downloadFile = async function(path) {
         try {
-          const resp = await apiRequest('/api/download/ticket', 'POST', { path: filePath });
-          const json = await resp.json();
-          if (json.success && json.download_url) {
-            window.location.href = json.download_url;
+          const resp = await apiRequest(`/api/download/ticket?path=${encodeURIComponent(path)}`);
+          const data = await resp.json();
+          if (data.success && data.ticket) {
+            window.location.href = `/api/download?ticket=${data.ticket}`;
           } else {
-            alert("Erro ao gerar link de download seguro: " + (json.error || ""));
+            alert("Erro ao gerar link de download.");
           }
         } catch (e) {
           alert("Falha ao solicitar download.");
         }
-      }
+      };
 
-      // Batch ZIP Download (Server-side ZIP, native browser streaming direct to disk, zero RAM on iPhone)
+      // Batch ZIP Download
       document.getElementById('btnDownloadSelected').onclick = async () => {
         if (selectedPaths.size === 0) return;
         const paths = Array.from(selectedPaths);
-        showProgressModal("Compactando no R36S...", "Aguarde enquanto o console cria o arquivo ZIP...");
+        showProgressModal("Compactando no R36S...", "Criando arquivo ZIP em segundo plano...");
 
         try {
           const resp = await apiRequest('/api/tasks/start', 'POST', { action: 'create_zip', paths });
@@ -825,7 +875,7 @@
               const statJson = await statResp.json();
               if (statJson.success) {
                 const task = statJson.task;
-                updateProgressModal(task.progress_text || "Compactando...");
+                updateProgressModal(task.progress_text || "Compactando arquivos...");
                 if (task.status === "completed") {
                   clearInterval(poll);
                   hideProgressModal();
@@ -846,6 +896,53 @@
         } catch (e) {
           hideProgressModal();
           alert("Falha de conexão com o console.");
+        }
+      };
+
+      // Copy / Move Clipboard
+      document.getElementById('btnCopySelected').onclick = () => {
+        if (selectedPaths.size === 0) return;
+        clipboard = { action: 'copy', paths: Array.from(selectedPaths) };
+        showClipboardBar();
+      };
+
+      document.getElementById('btnMoveSelected').onclick = () => {
+        if (selectedPaths.size === 0) return;
+        clipboard = { action: 'move', paths: Array.from(selectedPaths) };
+        showClipboardBar();
+      };
+
+      function showClipboardBar() {
+        const bar = document.getElementById('clipboardBar');
+        const text = document.getElementById('clipboardText');
+        text.textContent = `${clipboard.paths.length} item(ns) copiado(s)/movido(s) para a área de transferência.`;
+        bar.style.display = "flex";
+      }
+
+      document.getElementById('btnClearClipboard').onclick = () => {
+        clipboard = null;
+        document.getElementById('clipboardBar').style.display = "none";
+      };
+
+      document.getElementById('btnPaste').onclick = async () => {
+        if (!clipboard) return;
+        const endpoint = clipboard.action === 'copy' ? '/api/fs/copy' : '/api/fs/move';
+        try {
+          const resp = await apiRequest(endpoint, 'POST', {
+            sources: clipboard.paths,
+            destination_dir: currentPath
+          });
+          const res = await resp.json();
+          if (res.success) {
+            clipboard = null;
+            document.getElementById('clipboardBar').style.display = "none";
+            selectedPaths.clear();
+            loadDirectory(currentPath);
+          } else {
+            alert("Erro: " + (res.error || "Operação falhou"));
+          }
+        } catch (e) {
+          alert("Falha ao processar área de transferência.");
         }
       };
 
@@ -923,7 +1020,7 @@
       };
 
       // Rename
-      function promptRename(oldPath, oldName) {
+      window.promptRename = function(oldPath, oldName) {
         showModal({
           title: "Renomear Item",
           hasInput: true,
@@ -936,22 +1033,42 @@
             else alert("Erro: " + res.error);
           }
         });
-      }
+      };
 
-      // Delete Selected
+      // Delete Single
+      window.deleteSingle = function(path) {
+        showModal({
+          title: "Excluir item?",
+          message: `Deseja realmente excluir permanentemente "${path.split('/').pop()}"?`,
+          hasInput: false,
+          isDanger: true,
+          onConfirm: async () => {
+            const resp = await apiRequest('/api/fs/delete', 'POST', { paths: [path] });
+            const res = await resp.json();
+            if (res.success) loadDirectory(currentPath);
+            else alert("Erro ao excluir item.");
+          }
+        });
+      };
+
+      // Delete Selected Batch
       document.getElementById('btnDeleteSelected').onclick = () => {
         const count = selectedPaths.size;
         if (count === 0) return;
         showModal({
           title: `Excluir ${count} item(ns)?`,
-          message: "Atenção: Os arquivos e diretórios selecionados serão apagados permanentemente do cartão SD do R36S.",
+          message: "Atenção: Os arquivos e diretórios selecionados serão apagados permanentemente do armazenamento do R36S.",
           hasInput: false,
           isDanger: true,
           onConfirm: async () => {
             const resp = await apiRequest('/api/fs/delete', 'POST', { paths: Array.from(selectedPaths) });
             const res = await resp.json();
-            if (res.success) loadDirectory(currentPath);
-            else alert("Erro ao excluir alguns itens.");
+            if (res.success) {
+              selectedPaths.clear();
+              loadDirectory(currentPath);
+            } else {
+              alert("Erro ao excluir alguns itens.");
+            }
           }
         });
       };
@@ -966,18 +1083,16 @@
           onConfirm: async () => {
             await apiRequest('/api/shutdown', 'POST');
             document.body.innerHTML = `
-              <div style="padding: 50px; text-align: center;">
-                <h2>Servidor Encerrado</h2>
-                <p style="color: #9492a6; margin-top: 12px;">O R36S retornou ao EmulationStation com sucesso. Você pode fechar esta aba com segurança.</p>
+              <div style="padding: 60px 20px; text-align: center; max-width: 500px; margin: 0 auto;">
+                <h2 style="font-size: 1.5rem; margin-bottom: 12px;">Servidor Encerrado com Sucesso</h2>
+                <p style="color: var(--text-muted); line-height: 1.6;">O R36S retornou ao EmulationStation. Você pode fechar esta aba do navegador com segurança.</p>
               </div>
             `;
           }
         });
       };
 
-      // -------------------------------------------------------------
-      // Resumable Chunked Upload Implementation (Zero-Dependency)
-      // -------------------------------------------------------------
+      // Resumable Chunked Upload Implementation
       const fileInput = document.getElementById('fileInput');
       const btnUpload = document.getElementById('btnUpload');
       const progressPanel = document.getElementById('progressPanel');
@@ -995,6 +1110,7 @@
       };
 
       async function uploadFilesQueue(files) {
+        progressPanel.style.display = "block";
         for (let i = 0; i < files.length; i++) {
           await uploadSingleFile(files[i], i + 1, files.length);
         }
@@ -1004,10 +1120,8 @@
       }
 
       async function uploadSingleFile(file, index, total) {
-        progressPanel.style.display = "block";
         progressTitle.textContent = `[${index}/${total}] Preparando ${file.name}...`;
 
-        // Check active resumable upload session in localStorage
         const resumeStorageKey = `r36s_upload_${currentPath}_${file.name}_${file.size}`;
         let savedSession = null;
         try {
@@ -1015,7 +1129,6 @@
           if (raw) savedSession = JSON.parse(raw);
         } catch (e) {}
 
-        // 1. Handshake: Init or resume session on server
         const initPayload = {
           filename: file.name,
           target_dir: currentPath,
@@ -1036,10 +1149,7 @@
 
         const uploadId = initData.upload_id;
         const resumeToken = initData.resume_token;
-        localStorage.setItem(resumeStorageKey, JSON.stringify({
-          upload_id: uploadId,
-          resume_token: resumeToken
-        }));
+        localStorage.setItem(resumeStorageKey, JSON.stringify({ upload_id: uploadId, resume_token: resumeToken }));
 
         const chunkSize = initData.chunk_size || (2 * 1024 * 1024);
         let offset = initData.received_bytes || 0;
@@ -1080,20 +1190,18 @@
           bytesUploadedSinceStart += chunkBuffer.byteLength;
           chunkIndex++;
 
-          // Update Progress
           const pct = Math.min(100, Math.round((offset / file.size) * 100));
           progressPercent.textContent = pct + "%";
           progressBarFill.style.width = pct + "%";
           progressBytes.textContent = `${formatSize(offset)} / ${formatSize(file.size)}`;
 
           const elapsedSec = (Date.now() - startTime) / 1000;
-          if (elapsedSec > 0.5) {
+          if (elapsedSec > 0.3) {
             const speed = bytesUploadedSinceStart / elapsedSec;
             progressSpeed.textContent = formatSize(speed) + "/s";
           }
         }
 
-        // 2. Finalize Session (Atomic rename on server)
         const compResp = await apiRequest('/api/upload/complete', 'POST', {
           upload_id: uploadId,
           resume_token: resumeToken
@@ -1107,14 +1215,13 @@
       }
 
       // Drag and Drop
-      const dropTarget = document.getElementById('dropTarget');
       ['dragenter', 'dragover'].forEach(name => {
-        dropTarget.addEventListener(name, (e) => { e.preventDefault(); dropTarget.classList.add('drop-zone'); }, false);
+        document.body.addEventListener(name, (e) => { e.preventDefault(); document.body.classList.add('drop-zone'); }, false);
       });
       ['dragleave', 'drop'].forEach(name => {
-        dropTarget.addEventListener(name, (e) => { e.preventDefault(); dropTarget.classList.remove('drop-zone'); }, false);
+        document.body.addEventListener(name, (e) => { e.preventDefault(); document.body.classList.remove('drop-zone'); }, false);
       });
-      dropTarget.addEventListener('drop', (e) => {
+      document.body.addEventListener('drop', (e) => {
         if (e.dataTransfer.files.length > 0) {
           uploadFilesQueue(Array.from(e.dataTransfer.files));
         }
