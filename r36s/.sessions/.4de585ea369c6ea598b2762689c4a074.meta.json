@@ -1,0 +1,17 @@
+{
+  "upload_id": "4de585ea369c6ea598b2762689c4a074",
+  "resume_token": "7239d18b9ba4c00481a62b1a9b1b1054ff2bba0c32ee3d2d",
+  "filename": "corrupted.bin",
+  "target_dir": "/app/applet/r36s_test_sandbox/roms_snes",
+  "total_size": 100,
+  "received_bytes": 100,
+  "received_chunks": [
+    0
+  ],
+  "client_fingerprint": "corrupted.bin:100",
+  "expected_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "created_at": 1789089993.367436,
+  "last_activity": 1789089993.3692973,
+  "part_path": "/app/applet/r36s/.sessions/.4de585ea369c6ea598b2762689c4a074.part",
+  "final_path": "/app/applet/r36s_test_sandbox/roms_snes/corrupted.bin"
+}
