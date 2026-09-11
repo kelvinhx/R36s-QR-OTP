@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 """
 Build script to pack server.py, ui.html, controls.gptk, and assets/ into a single,
-completely self-contained R36S_WebFileManager.sh executable.
+completely self-contained R36S_WebFileManager.sh executable with strict integrity manifest.
 """
 
 import os
 import base64
 import zipfile
 import tempfile
+import hashlib
+
+def sha256sum(filepath):
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        while True:
+            chunk = f.read(8192)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
 
 def build_standalone():
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,16 +29,23 @@ def build_standalone():
     target_sh = os.path.join(base_dir, "R36S_WebFileManager.sh")
 
     with open(server_py, "rb") as f:
-        server_b64 = base64.b64encode(f.read()).decode("ascii")
+        server_bytes = f.read()
+        server_b64 = base64.b64encode(server_bytes).decode("ascii")
+        server_sha = hashlib.sha256(server_bytes).hexdigest()
 
     with open(ui_html, "rb") as f:
-        ui_b64 = base64.b64encode(f.read()).decode("ascii")
+        ui_bytes = f.read()
+        ui_b64 = base64.b64encode(ui_bytes).decode("ascii")
+        ui_sha = hashlib.sha256(ui_bytes).hexdigest()
 
     with open(controls_gptk, "rb") as f:
-        controls_b64 = base64.b64encode(f.read()).decode("ascii")
+        controls_bytes = f.read()
+        controls_b64 = base64.b64encode(controls_bytes).decode("ascii")
+        controls_sha = hashlib.sha256(controls_bytes).hexdigest()
 
     # Pack assets dir into a zip in memory
     assets_b64 = ""
+    assets_sha = ""
     if os.path.isdir(assets_dir):
         with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_zip:
             tmp_zip_name = tmp_zip.name
@@ -39,27 +57,33 @@ def build_standalone():
                         rel_path = os.path.relpath(full_path, assets_dir)
                         zf.write(full_path, rel_path)
             with open(tmp_zip_name, "rb") as f:
-                assets_b64 = base64.b64encode(f.read()).decode("ascii")
+                assets_bytes = f.read()
+                assets_b64 = base64.b64encode(assets_bytes).decode("ascii")
+                assets_sha = hashlib.sha256(assets_bytes).hexdigest()
         finally:
             if os.path.exists(tmp_zip_name):
                 os.remove(tmp_zip_name)
 
     sh_template = f'''#!/usr/bin/env bash
 # ==============================================================================
-# R36S Web File Manager + QR Transfer (Autocontido)
+# R36S Web File Manager + QR Transfer (Autocontido com Manifesto SHA-256)
 # Desenvolvido para R36S físico com dArkOS RE (Debian 12 Bookworm, Kernel 4.4.189)
 #
 # Produto 100% autocontido: não depende de nenhum arquivo externo.
-# Pode ser colocado diretamente em /roms/tools/ e iniciado pelo EmulationStation.
 # ==============================================================================
 
 set -eo pipefail
 
+# Manifesto de integridade SHA-256 do payload
+EXPECTED_SERVER_SHA="{server_sha}"
+EXPECTED_UI_SHA="{ui_sha}"
+EXPECTED_CONTROLS_SHA="{controls_sha}"
+EXPECTED_ASSETS_SHA="{assets_sha}"
+
 # ------------------------------------------------------------------------------
-# 1. TRAP & LIMPEZA DE PROCESSOS (Encerramento Limpo Garantido)
+# 1. TRAP & LIMPEZA DE PROCESSOS (Gerenciamento Exclusivo por PID)
 # ------------------------------------------------------------------------------
 cleanup() {{
-    # Restaurar cursor e limpar terminal
     printf "\\033[?25h" || true
     echo ""
     echo ">> Encerrando serviços do R36S Web File Manager..."
@@ -71,8 +95,8 @@ cleanup() {{
 
     if [[ -n "${{GPTOKEYB_PID:-}}" ]] && kill -0 "$GPTOKEYB_PID" 2>/dev/null; then
         kill "$GPTOKEYB_PID" 2>/dev/null || true
+        wait "$GPTOKEYB_PID" 2>/dev/null || true
     fi
-    killall -9 gptokeyb 2>/dev/null || true
 
     echo ">> Servidor encerrado. Retornando ao EmulationStation..."
     sleep 1
@@ -99,35 +123,34 @@ fi
 
 if [[ -z "$PYTHON_BIN" ]]; then
     echo "ERRO CRÍTICO: Python 3 não foi detectado no sistema."
-    echo "O dArkOS RE requer o runtime padrão do Python 3."
-    echo "Pressione qualquer tecla ou aguarde para sair..."
-    read -t 5 -n 1 || true
     exit 1
 fi
 
 echo ">> Python 3 detectado: $PYTHON_BIN"
 
 # ------------------------------------------------------------------------------
-# 3. EXTRAÇÃO DOS COMPONENTES AUTOCONTIDOS (Zero Dependências Externas)
+# 3. EXTRAÇÃO COM STAGING/TRANSAÇÃO E VALIDAÇÃO DE MANIFESTO SHA-256
 # ------------------------------------------------------------------------------
-# Determina diretório de instalação dos utilitários
 if [[ -d "/roms/tools" ]] && [[ -w "/roms/tools" ]]; then
-    APP_DIR="/roms/tools/.tools/R36S_WebFileManager"
+    APP_BASE="/roms/tools/.tools"
 else
-    # Fallback para teste em qualquer outro diretório
     SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
-    APP_DIR="$SCRIPT_DIR/.tools/R36S_WebFileManager"
+    APP_BASE="$SCRIPT_DIR/.tools"
 fi
 
-mkdir -p "$APP_DIR/assets"
-echo ">> Preparando arquivos da aplicação em $APP_DIR..."
+APP_DIR="$APP_BASE/R36S_WebFileManager"
+STAGING_DIR="$APP_BASE/R36S_WebFileManager_staging"
+
+echo ">> Preparando staging em $STAGING_DIR..."
+rm -rf "$STAGING_DIR"
+mkdir -p "$STAGING_DIR/assets"
 
 # Extrair server.py
-"$PYTHON_BIN" -c "import base64; open('$APP_DIR/server.py', 'wb').write(base64.b64decode('$SERVER_B64'))"
+"$PYTHON_BIN" -c "import base64; open('$STAGING_DIR/server.py', 'wb').write(base64.b64decode('$SERVER_B64'))"
 # Extrair ui.html
-"$PYTHON_BIN" -c "import base64; open('$APP_DIR/ui.html', 'wb').write(base64.b64decode('$UI_B64'))"
+"$PYTHON_BIN" -c "import base64; open('$STAGING_DIR/ui.html', 'wb').write(base64.b64decode('$UI_B64'))"
 # Extrair controls.gptk
-"$PYTHON_BIN" -c "import base64; open('$APP_DIR/controls.gptk', 'wb').write(base64.b64decode('$CONTROLS_B64'))"
+"$PYTHON_BIN" -c "import base64; open('$STAGING_DIR/controls.gptk', 'wb').write(base64.b64decode('$CONTROLS_B64'))"
 # Extrair assets zip
 "$PYTHON_BIN" -c "
 import base64, zipfile, io
@@ -136,27 +159,42 @@ if b64_data:
     try:
         data = base64.b64decode(b64_data)
         zf = zipfile.ZipFile(io.BytesIO(data))
-        zf.extractall('$APP_DIR/assets')
+        zf.extractall('$STAGING_DIR/assets')
     except Exception as e:
         print('Warning extracting assets:', e)
 "
 
+# Validação de integridade do payload antes do commit atômico
+echo ">> Validando hashes SHA-256 do payload..."
+CALC_SERVER_SHA=$("$PYTHON_BIN" -c "import hashlib; print(hashlib.sha256(open('$STAGING_DIR/server.py','rb').read()).hexdigest())")
+CALC_UI_SHA=$("$PYTHON_BIN" -c "import hashlib; print(hashlib.sha256(open('$STAGING_DIR/ui.html','rb').read()).hexdigest())")
+CALC_CONTROLS_SHA=$("$PYTHON_BIN" -c "import hashlib; print(hashlib.sha256(open('$STAGING_DIR/controls.gptk','rb').read()).hexdigest())")
+
+if [[ "$CALC_SERVER_SHA" != "$EXPECTED_SERVER_SHA" ]] || [[ "$CALC_UI_SHA" != "$EXPECTED_UI_SHA" ]] || [[ "$CALC_CONTROLS_SHA" != "$EXPECTED_CONTROLS_SHA" ]]; then
+    echo "ERRO CRÍTICO DE INTEGRIDADE: Falha na validação SHA-256 do payload!"
+    rm -rf "$STAGING_DIR"
+    exit 1
+fi
+
+echo ">> Integridade do payload confirmada com sucesso!"
+
+# Commit atômico (staging -> app_dir)
+rm -rf "$APP_DIR"
+mv "$STAGING_DIR" "$APP_DIR"
 chmod +x "$APP_DIR/server.py"
 
 # ------------------------------------------------------------------------------
-# 4. DETECÇÃO DINÂMICA DO IP LOCAL (Offline-first, sem ping externo 1.1.1.1)
+# 4. DETECÇÃO DINÂMICA DA INTERFACE E IP LOCAL (Prioridade na Rota Ativa)
 # ------------------------------------------------------------------------------
 echo ">> Detectando endereço de rede local do console..."
 LOCAL_IP=""
-
-# Método 1: Rota padrão da rede local
 LOCAL_IP=$("$PYTHON_BIN" -c "
 import socket, subprocess
 ip = ''
 try:
     routes = subprocess.check_output(['ip', 'route', 'show']).decode()
     for line in routes.splitlines():
-        if line.startswith('default'):
+        if 'default' in line or 'proto kernel' in line:
             parts = line.split()
             if 'dev' in parts:
                 dev = parts[parts.index('dev') + 1]
@@ -184,29 +222,19 @@ print(ip)
 ")
 
 if [[ -z "$LOCAL_IP" ]]; then
-    echo "AVISO: Não foi possível detectar IP de rede local Wi-Fi ativa."
-    echo "Verifique se o adaptador Wi-Fi USB do R36S está conectado."
     LOCAL_IP="127.0.0.1"
 fi
-
 echo ">> IP Local: $LOCAL_IP"
 
 # ------------------------------------------------------------------------------
-# 5. GERAÇÃO DO TOKEN CRIPTOGRÁFICO EFÊMERO (Zero Fallback Previsível)
+# 5. TOKEN EFÊMERO & RAÍZES DE ARMAZENAMENTO (Sem Fallback Artificial para /roms)
 # ------------------------------------------------------------------------------
 AUTH_TOKEN=$("$PYTHON_BIN" -c "import secrets; print(secrets.token_hex(16))" 2>/dev/null || true)
 if [[ -z "$AUTH_TOKEN" ]] || [[ ${{#AUTH_TOKEN}} -lt 32 ]]; then
     echo "ERRO CRÍTICO DE SEGURANÇA: Falha ao gerar token criptográfico aleatório."
-    echo "O dArkOS RE requer gerador seguro (secrets.token_hex). Abortando."
     exit 1
 fi
 
-# ------------------------------------------------------------------------------
-# 6. SELEÇÃO DINÂMICA DE PORTA (8080..8090) & INICIALIZAÇÃO COM HEALTH CHECK REAL
-# ------------------------------------------------------------------------------
-echo ">> Alocando porta dinâmica de serviço (8080-8090) e validando HTTP..."
-
-# Identificar raízes válidas no R36S
 STORAGE_ROOTS=()
 for r in "/roms" "/roms2" "/media" "/mnt"; do
     if [[ -d "$r" ]]; then
@@ -215,21 +243,23 @@ for r in "/roms" "/roms2" "/media" "/mnt"; do
 done
 
 if [[ ${{#STORAGE_ROOTS[@]}} -eq 0 ]]; then
-    STORAGE_ROOTS=("/roms")
+    echo "ERRO CRÍTICO: Nenhum diretório de armazenamento válido encontrado (/roms, /roms2, /media, /mnt)."
+    echo "O R36S Web File Manager requer pelo menos uma raiz de armazenamento válida."
+    exit 1
 fi
 
+# ------------------------------------------------------------------------------
+# 6. SELEÇÃO DINÂMICA DE PORTA (8080..8090) & HEALTH CHECK HTTP
+# ------------------------------------------------------------------------------
 PORT=""
 SERVER_PID=""
 HEALTHY=0
 
 for p in {{8080..8090}}; do
-    # 1. Checa disponibilidade preliminar de socket
     if ! "$PYTHON_BIN" -c "import socket; s = socket.socket(); s.bind(('0.0.0.0', $p)); s.close()" 2>/dev/null; then
-        echo "   [Porta $p em uso, testando próxima...]"
         continue
     fi
 
-    # 2. Inicia servidor na porta candidata
     "$PYTHON_BIN" "$APP_DIR/server.py" \\
         --port "$p" \\
         --token "$AUTH_TOKEN" \\
@@ -238,7 +268,6 @@ for p in {{8080..8090}}; do
     
     CANDIDATE_PID=$!
 
-    # 3. Health check HTTP real via GET /api/status?token=...
     IS_OK=0
     for attempt in {{1..15}}; do
         if ! kill -0 "$CANDIDATE_PID" 2>/dev/null; then
@@ -263,12 +292,11 @@ except Exception:
         sleep 0.2
     done
 
-    # 4. Avaliação do health check
     if [[ "$IS_OK" -eq 1 ]]; then
         PORT="$p"
         SERVER_PID="$CANDIDATE_PID"
         HEALTHY=1
-        echo ">> Servidor ativo e verificado com sucesso via HTTP na porta $PORT."
+        echo ">> Servidor ativo na porta $PORT."
         break
     else
         kill "$CANDIDATE_PID" 2>/dev/null || true
@@ -277,30 +305,29 @@ except Exception:
 done
 
 if [[ "$HEALTHY" -ne 1 ]] || [[ -z "$PORT" ]]; then
-    echo "ERRO CRÍTICO: Nenhuma porta disponível na faixa 8080-8090 respondeu ao health check HTTP."
-    if [[ -f "$APP_DIR/server.log" ]]; then
-        echo "Últimas linhas do log do servidor:"
-        tail -n 15 "$APP_DIR/server.log"
-    fi
+    echo "ERRO CRÍTICO: Nenhuma porta disponível respondeu ao health check HTTP."
     exit 1
 fi
 
 echo "$SERVER_PID" > "$APP_DIR/server.pid" 2>/dev/null || true
-echo ">> Servidor ONLINE e verificado com sucesso!"
 
 # ------------------------------------------------------------------------------
-# 8. MAPEAMENTO DE CONTROLES GPTOKEYB (dArkOS RE)
+# 7. MAPEAMENTO GPTOKEYB COM DETECÇÃO E RELATÓRIO DE FALHA
 # ------------------------------------------------------------------------------
 if command -v gptokeyb >/dev/null 2>&1; then
     gptokeyb -c "$APP_DIR/controls.gptk" -1 &
     GPTOKEYB_PID=$!
+    echo ">> gptokeyb iniciado (PID: $GPTOKEYB_PID)."
 elif [[ -x "/usr/bin/gptokeyb" ]]; then
     /usr/bin/gptokeyb -c "$APP_DIR/controls.gptk" -1 &
     GPTOKEYB_PID=$!
+    echo ">> gptokeyb iniciado em /usr/bin/gptokeyb (PID: $GPTOKEYB_PID)."
+else
+    echo "AVISO: gptokeyb não encontrado no sistema. Controles físicos do gamepad desativados (modo web puro)."
 fi
 
 # ------------------------------------------------------------------------------
-# 9. EXIBIÇÃO DO QR CODE & INSTRUÇÕES NA TELA DO R36S (640x480)
+# 8. EXIBIÇÃO DO QR CODE & LOOP PRINCIPAL
 # ------------------------------------------------------------------------------
 clear || true
 CONNECT_URL="http://$LOCAL_IP:$PORT/?token=$AUTH_TOKEN"
@@ -309,13 +336,9 @@ echo "========================================================"
 echo "          R36S WEB FILE MANAGER + QR TRANSFER           "
 echo "========================================================"
 echo ""
-echo "  Escaneie o QR Code abaixo com a câmera do seu celular"
-echo "  ou acesse o link no navegador do seu computador/PC:"
-echo ""
 echo "  URL: $CONNECT_URL"
 echo ""
 
-# Renderizar QR Code no console usando o gerador interno de alta precisão
 "$PYTHON_BIN" -c "
 import sys
 sys.path.insert(0, '$APP_DIR')
@@ -329,13 +352,8 @@ echo "  Status: SERVIDOR ATIVO (Porta $PORT)"
 echo "  Pressione B ou START no console para sair e retornar"
 echo "--------------------------------------------------------"
 
-# ------------------------------------------------------------------------------
-# 10. LOOP PRINCIPAL DE AGUARDO DE TECLA OU ENCERRAMENTO REMOTO
-# ------------------------------------------------------------------------------
 while kill -0 "$SERVER_PID" 2>/dev/null; do
-    # Ler tecla com timeout de 1s para responder a shutdown remoto via web
     if read -t 1 -n 1 KEY 2>/dev/null; then
-        # Tecla pressionada (ESC, q, Enter, etc)
         break
     fi
 done
@@ -343,8 +361,12 @@ done
 exit 0
 '''
 
-    # Replace placeholders
-    sh_content = sh_template.replace("$SERVER_B64", server_b64)
+    sh_content = sh_template.replace("{server_sha}", server_sha)
+    sh_content = sh_content.replace("{ui_sha}", ui_sha)
+    sh_content = sh_content.replace("{controls_sha}", controls_sha)
+    sh_content = sh_content.replace("{assets_sha}", assets_sha)
+
+    sh_content = sh_content.replace("$SERVER_B64", server_b64)
     sh_content = sh_content.replace("$UI_B64", ui_b64)
     sh_content = sh_content.replace("$CONTROLS_B64", controls_b64)
     sh_content = sh_content.replace("$ASSETS_B64", assets_b64)

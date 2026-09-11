@@ -51,9 +51,11 @@ class UploadSession:
         self.created_at = created_at if created_at is not None else time.time()
         self.last_activity = last_activity if last_activity is not None else time.time()
 
-        # Place .part and .meta.json directly inside destination filesystem for atomic commit
-        self.part_path = os.path.join(self.target_dir, f".{upload_id}.part")
-        self.meta_path = os.path.join(self.target_dir, f".{upload_id}.meta.json")
+        # Place .part and .meta.json directly in private session directory
+        session_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".sessions")
+        os.makedirs(session_base, exist_ok=True)
+        self.part_path = os.path.join(session_base, f".{upload_id}.part")
+        self.meta_path = os.path.join(session_base, f".{upload_id}.meta.json")
         self.final_path = os.path.join(self.target_dir, filename)
 
         self.received_chunks = received_chunks if received_chunks is not None else []
@@ -356,7 +358,7 @@ class FileManagerBackend:
 
     def get_session(self, upload_id: str) -> Optional[UploadSession]:
         """
-        Retrieves active upload session from memory or recovers it from on-disk metadata.
+        Retrieves active upload session from memory or recovers it from private session directory.
         Verifies session expiration against session_ttl.
         """
         now = time.time()
@@ -369,13 +371,14 @@ class FileManagerBackend:
                 return None
             return session
 
-        # 2. Not in memory: Scan allowed roots for disk metadata .<upload_id>.meta.json
+        # 2. Not in memory: Scan private session directory via os.listdir() (NO os.walk on storage roots)
         meta_filename = f".{upload_id}.meta.json"
-        for root in self.allowed_roots:
+        session_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".sessions")
+        if os.path.isdir(session_base):
             try:
-                for dirpath, _, filenames in os.walk(root, followlinks=False):
-                    if meta_filename in filenames:
-                        meta_full = os.path.join(dirpath, meta_filename)
+                for filename in os.listdir(session_base):
+                    if filename == meta_filename:
+                        meta_full = os.path.join(session_base, filename)
                         recovered = UploadSession.load_from_meta(meta_full)
                         if recovered:
                             if now - recovered.last_activity > self.session_ttl:
@@ -390,8 +393,8 @@ class FileManagerBackend:
 
     def cleanup_abandoned_uploads(self, max_age_seconds: Optional[int] = None) -> int:
         """
-        Scans for abandoned uploads older than max_age_seconds (default: 2 hours)
-        and purges their .part and .meta.json files without disturbing active ones.
+        Scans private session directory for abandoned uploads older than max_age_seconds
+        and purges their .part and .meta.json files without executing os.walk() on storage roots.
         """
         ttl = max_age_seconds if max_age_seconds is not None else self.session_ttl
         now = time.time()
@@ -404,30 +407,30 @@ class FileManagerBackend:
             del self.upload_sessions[uid]
             purged += 1
 
-        # Scan filesystem for orphaned metadata and part files
-        for root in self.allowed_roots:
+        # Scan private session directory via os.listdir()
+        session_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".sessions")
+        if os.path.isdir(session_base):
             try:
-                for dirpath, _, filenames in os.walk(root, followlinks=False):
-                    for f in filenames:
-                        if f.startswith(".") and f.endswith(".meta.json"):
-                            full_meta = os.path.join(dirpath, f)
-                            try:
-                                mtime = os.path.getmtime(full_meta)
-                                if (now - mtime) > ttl:
-                                    uid = f[1:-10]
-                                    part_file = os.path.join(dirpath, f".{uid}.part")
-                                    if os.path.exists(part_file):
-                                        try:
-                                            os.unlink(part_file)
-                                        except OSError:
-                                            pass
+                for f in os.listdir(session_base):
+                    if f.startswith(".") and f.endswith(".meta.json"):
+                        full_meta = os.path.join(session_base, f)
+                        try:
+                            mtime = os.path.getmtime(full_meta)
+                            if (now - mtime) > ttl:
+                                uid = f[1:-10]
+                                part_file = os.path.join(session_base, f".{uid}.part")
+                                if os.path.exists(part_file):
                                     try:
-                                        os.unlink(full_meta)
+                                        os.unlink(part_file)
                                     except OSError:
                                         pass
-                                    purged += 1
-                            except OSError:
-                                pass
+                                try:
+                                    os.unlink(full_meta)
+                                except OSError:
+                                    pass
+                                purged += 1
+                        except OSError:
+                            pass
             except Exception:
                 pass
 
