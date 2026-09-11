@@ -14,6 +14,7 @@ import sys
 import time
 import json
 import shutil
+import re
 import socket
 import errno
 import hashlib
@@ -866,14 +867,37 @@ def run_audit():
         shut_req.add_header("X-Auth-Token", test_token)
         with urllib.request.urlopen(shut_req) as resp:
             shut_res = json.loads(resp.read().decode())
-            assert_test("LOCAL", "Encerramento: API de shutdown remoto seguro", shut_res.get("success") is True)
+            assert_test("LOCAL", "Encerramento: API de shutdown remoto seguro (HTTP 200)", shut_res.get("success") is True)
+
+        # Confirm process actually terminates on its own (server delayed_kill is 0.5s)
+        terminated_cleanly = False
+        try:
+            proc.wait(timeout=3.5)
+            terminated_cleanly = True
+        except subprocess.TimeoutExpired:
+            terminated_cleanly = False
+
+        assert_test("LOCAL", "Encerramento: Processo do servidor realmente finalizado pós-shutdown", terminated_cleanly and proc.poll() is not None)
+
+        # Confirm port is released and bindable
+        port_released = False
+        try:
+            test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            test_sock.bind(("127.0.0.1", test_port))
+            test_sock.close()
+            port_released = True
+        except Exception:
+            port_released = False
+
+        assert_test("LOCAL", "Encerramento: Porta de rede liberada pós-shutdown", port_released)
 
     finally:
-        # Stop Server processes
+        # Stop Server processes if still alive
         if proc.poll() is None:
             proc.terminate()
             try:
-                proc.wait(timeout=3)
+                proc.wait(timeout=2)
             except Exception:
                 proc.kill()
 
@@ -907,30 +931,150 @@ def run_audit():
             files_in_dir == ["R36S_WebFileManager.sh"]
         )
 
-        # 3. Simulate extraction
-        extract_cmd = f"bash -c 'cd {isolated_test_dir} && ./R36S_WebFileManager.sh & PID=$!; sleep 1.5; kill $PID 2>/dev/null || true'"
-        subprocess.run(extract_cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # 3. Check integrity checksums in manifest (strictly 64 hex characters)
+        manifest_hex_valid = True
+        sh_code = ""
+        with open(isolated_sh, "r", encoding="utf-8", errors="ignore") as f:
+            sh_code = f.read()
 
+        manifest_keys = ["EXPECTED_SERVER_SHA", "EXPECTED_UI_SHA", "EXPECTED_CONTROLS_SHA"]
+        for key in manifest_keys:
+            m = re.search(rf'{key}="([a-f0-9]{{64}})"', sh_code)
+            if not m:
+                manifest_hex_valid = False
+                break
+        assert_test("STANDALONE", "Standalone: Integridade do hash manifesto (estritamente 64 hex)", manifest_hex_valid)
+
+        # 4. Isolated full execution test: start script in isolated directory
+        mock_storage = os.path.join(isolated_test_dir, "mock_roms")
+        os.makedirs(mock_storage, exist_ok=True)
+
+        env = os.environ.copy()
+        env["TEST_OVERRIDE_IP"] = "127.0.0.1"
+        env["TEST_OVERRIDE_ROOTS"] = mock_storage
+
+        # Launch R36S_WebFileManager.sh in background in isolated dir
+        sh_proc = subprocess.Popen(
+            ["bash", "./R36S_WebFileManager.sh"],
+            cwd=isolated_test_dir,
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        # Wait for extraction and server startup (up to 4 seconds)
         extracted_tool_dir = os.path.join(isolated_test_dir, ".tools", "R36S_WebFileManager")
         ext_server = os.path.join(extracted_tool_dir, "server.py")
         ext_ui = os.path.join(extracted_tool_dir, "ui.html")
         ext_gptk = os.path.join(extracted_tool_dir, "controls.gptk")
 
+        started_ok = False
+        standalone_port = None
+        standalone_token = None
+
+        for _ in range(40):
+            if os.path.isfile(ext_server) and os.path.isfile(ext_ui) and os.path.isfile(ext_gptk):
+                # Check server.pid
+                pid_file = os.path.join(extracted_tool_dir, "server.pid")
+                if os.path.isfile(pid_file):
+                    started_ok = True
+                    break
+            time.sleep(0.1)
+
         assert_test(
-            "STANDALONE", "Standalone: Extração autônoma de server.py, ui.html e controls.gptk",
-            os.path.isfile(ext_server) and os.path.isfile(ext_ui) and os.path.isfile(ext_gptk)
+            "STANDALONE", "Standalone: Extração autônoma completa (server.py, ui.html, controls.gptk)",
+            started_ok
         )
 
-        # 4. Check integrity checksums
-        checksum_ok = True
+        # Verify extracted hashes match actual files
+        extracted_hashes_match = False
+        if started_ok:
+            calc_srv = hashlib.sha256(open(ext_server, "rb").read()).hexdigest()
+            calc_ui = hashlib.sha256(open(ext_ui, "rb").read()).hexdigest()
+            calc_gptk = hashlib.sha256(open(ext_gptk, "rb").read()).hexdigest()
+            if (f'EXPECTED_SERVER_SHA="{calc_srv}"' in sh_code and
+                f'EXPECTED_UI_SHA="{calc_ui}"' in sh_code and
+                f'EXPECTED_CONTROLS_SHA="{calc_gptk}"' in sh_code):
+                extracted_hashes_match = True
+
+        assert_test("STANDALONE", "Standalone: Hashes dos arquivos extraídos conferem com o manifesto", extracted_hashes_match)
+
+        # Check server.port and server.token or server log
+        port_file = os.path.join(extracted_tool_dir, "server.port")
+        token_file = os.path.join(extracted_tool_dir, "server.token")
+        server_log_file = os.path.join(extracted_tool_dir, "server.log")
+        http_responding = False
+
+        for _ in range(30):
+            if os.path.isfile(port_file) and os.path.isfile(token_file):
+                try:
+                    p_txt = open(port_file).read().strip()
+                    t_txt = open(token_file).read().strip()
+                    if p_txt and t_txt:
+                        standalone_port = int(p_txt)
+                        standalone_token = t_txt
+                        break
+                except Exception:
+                    pass
+            if os.path.isfile(server_log_file):
+                log_text = open(server_log_file, "r", errors="ignore").read()
+                port_match = re.search(r"port (\d+) with token ([a-f0-9]+)", log_text)
+                if port_match:
+                    standalone_port = int(port_match.group(1))
+                    standalone_token = port_match.group(2)
+                    break
+            time.sleep(0.1)
+
+        if standalone_port and standalone_token:
+            try:
+                st_req = urllib.request.Request(f"http://127.0.0.1:{standalone_port}/api/status?token={standalone_token}")
+                with urllib.request.urlopen(st_req, timeout=1.0) as resp:
+                    st_data = json.loads(resp.read().decode())
+                    if st_data.get("success") is True:
+                        http_responding = True
+            except Exception:
+                http_responding = False
+
+        assert_test("STANDALONE", "Standalone: Servidor inicia e passa no health check HTTP", http_responding)
+
+        # Check QR code generation in standalone environment
+        qr_gen_ok = False
         try:
-            with open(isolated_sh, "r", encoding="utf-8", errors="ignore") as f:
-                sh_code = f.read()
-                if "EXPECTED_SERVER_SHA" not in sh_code or "EXPECTED_UI_SHA" not in sh_code:
-                    checksum_ok = False
+            from server import render_ansi_qr
+            qr_output = render_ansi_qr(f"http://127.0.0.1:{standalone_port}/?token={standalone_token}")
+            if "█" in qr_output or "http://127.0.0.1" in qr_output:
+                qr_gen_ok = True
         except Exception:
-            checksum_ok = False
-        assert_test("STANDALONE", "Standalone: Integridade do hash manifesto", checksum_ok)
+            qr_gen_ok = False
+        assert_test("STANDALONE", "Standalone: Geração de QR code em terminal", qr_gen_ok)
+
+        # 5. Remote shutdown test on standalone server
+        standalone_shutdown_ok = False
+        if standalone_port and standalone_token:
+            try:
+                sd_req = urllib.request.Request(f"http://127.0.0.1:{standalone_port}/api/shutdown", method="POST")
+                sd_req.add_header("X-Auth-Token", standalone_token)
+                with urllib.request.urlopen(sd_req, timeout=1.0) as resp:
+                    sd_data = json.loads(resp.read().decode())
+                    if sd_data.get("success") is True:
+                        standalone_shutdown_ok = True
+            except Exception:
+                standalone_shutdown_ok = False
+
+        assert_test("STANDALONE", "Standalone: Shutdown remoto finaliza servidor e launcher", standalone_shutdown_ok)
+
+        # Wait for launcher process to cleanly exit via watchdog & trap cleanup
+        launcher_clean_exit = False
+        try:
+            sh_proc.wait(timeout=4.0)
+            launcher_clean_exit = True
+        except subprocess.TimeoutExpired:
+            sh_proc.kill()
+            launcher_clean_exit = False
+
+        assert_test("STANDALONE", "Standalone: Launcher encerra e limpa recursos sem processos órfãos", launcher_clean_exit)
 
     finally:
         shutil.rmtree(isolated_test_dir, ignore_errors=True)

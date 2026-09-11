@@ -74,6 +74,16 @@ def build_standalone():
 
 set -eo pipefail
 
+# Garante permissão de execução
+chmod +x "$0" 2>/dev/null || true
+
+# Redirecionamento de TTY para inicialização via EmulationStation
+if [[ -e "/dev/tty1" ]] && [[ ! -t 0 ]]; then
+    exec < /dev/tty1 > /dev/tty1 2>&1
+fi
+export TERM=linux
+printf "\\033[?25l" 2>/dev/null || true
+
 # Manifesto de integridade SHA-256 do payload
 EXPECTED_SERVER_SHA="{server_sha}"
 EXPECTED_UI_SHA="{ui_sha}"
@@ -81,29 +91,59 @@ EXPECTED_CONTROLS_SHA="{controls_sha}"
 EXPECTED_ASSETS_SHA="{assets_sha}"
 
 # ------------------------------------------------------------------------------
-# 1. TRAP & LIMPEZA DE PROCESSOS (Gerenciamento Exclusivo por PID)
+# 1. TRAP & LIMPEZA DE PROCESSOS (Gerenciamento Exclusivo por PID - Idempotente)
 # ------------------------------------------------------------------------------
+CLEANUP_DONE=0
 cleanup() {{
-    printf "\\033[?25h" || true
+    if [[ "$CLEANUP_DONE" -eq 1 ]]; then
+        return 0
+    fi
+    CLEANUP_DONE=1
+    printf "\\033[?25h" 2>/dev/null || true
     echo ""
     echo ">> Encerrando serviços do R36S Web File Manager..."
 
-    if [[ -n "${{SERVER_PID:-}}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
-        kill "$SERVER_PID" 2>/dev/null || true
-        wait "$SERVER_PID" 2>/dev/null || true
+    # 1. Finalizar watchdog remoto
+    if [[ -n "${{WATCHDOG_PID:-}}" ]] && kill -0 "$WATCHDOG_PID" 2>/dev/null; then
+        kill "$WATCHDOG_PID" 2>/dev/null || true
     fi
 
-    if [[ -n "${{GPTOKEYB_PID:-}}" ]] && kill -0 "$GPTOKEYB_PID" 2>/dev/null; then
-        kill "$GPTOKEYB_PID" 2>/dev/null || true
-        wait "$GPTOKEYB_PID" 2>/dev/null || true
+    # 2. Encerrar servidor Python do próprio aplicativo (por PID exclusivo)
+    if [[ -n "${{SERVER_PID:-}}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
+        kill -TERM "$SERVER_PID" 2>/dev/null || true
+        for _ in {{1..15}}; do
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+                break
+            fi
+            sleep 0.1
+        done
+        if kill -0 "$SERVER_PID" 2>/dev/null; then
+            kill -9 "$SERVER_PID" 2>/dev/null || true
+        fi
     fi
+
+    # 3. Encerrar gptokeyb associado ao aplicativo (por PID exclusivo)
+    if [[ -n "${{GPTOKEYB_PID:-}}" ]] && kill -0 "$GPTOKEYB_PID" 2>/dev/null; then
+        kill -TERM "$GPTOKEYB_PID" 2>/dev/null || true
+        for _ in {{1..10}}; do
+            if ! kill -0 "$GPTOKEYB_PID" 2>/dev/null; then
+                break
+            fi
+            sleep 0.1
+        done
+        if kill -0 "$GPTOKEYB_PID" 2>/dev/null; then
+            kill -9 "$GPTOKEYB_PID" 2>/dev/null || true
+        fi
+    fi
+
+    rm -f "${{APP_DIR:-}}/server.pid" 2>/dev/null || true
 
     echo ">> Servidor encerrado. Retornando ao EmulationStation..."
-    sleep 1
-    clear || true
+    sleep 0.5
+    clear 2>/dev/null || true
 }}
 
-trap cleanup EXIT INT TERM
+trap cleanup EXIT INT TERM HUP
 
 # ------------------------------------------------------------------------------
 # 2. VERIFICAÇÃO DE AMBIENTE & PYTHON 3 RUNTIME
@@ -183,31 +223,44 @@ rm -rf "$APP_DIR"
 mv "$STAGING_DIR" "$APP_DIR"
 chmod +x "$APP_DIR/server.py"
 
-# ------------------------------------------------------------------------------
-# 4. DETECÇÃO DINÂMICA DA INTERFACE E IP LOCAL (Prioridade na Rota Ativa)
+## ------------------------------------------------------------------------------
+# 4. DETECÇÃO DINÂMICA DA INTERFACE E IP LOCAL (Sem tráfego externo para 8.8.8.8)
 # ------------------------------------------------------------------------------
 echo ">> Detectando endereço de rede local do console..."
 LOCAL_IP=""
-LOCAL_IP=$("$PYTHON_BIN" -c "
+if [[ -n "${{TEST_OVERRIDE_IP:-}}" ]]; then
+    LOCAL_IP="$TEST_OVERRIDE_IP"
+else
+    LOCAL_IP=$("$PYTHON_BIN" -c "
 import sys
 sys.path.insert(0, '$APP_DIR')
 from server import get_ip
 print(get_ip())
-")
+" 2>/dev/null || true)
+fi
 
-if [[ -z "$LOCAL_IP" ]] || [[ "$LOCAL_IP" =~ ^127\. ]] || [[ "$LOCAL_IP" =~ ^169\.254\. ]] || [[ "$LOCAL_IP" == "0.0.0.0" ]]; then
+if [[ -z "${{TEST_OVERRIDE_IP:-}}" ]] && ([[ -z "$LOCAL_IP" ]] || [[ "$LOCAL_IP" =~ ^127\. ]] || [[ "$LOCAL_IP" =~ ^169\.254\. ]] || [[ "$LOCAL_IP" == "0.0.0.0" ]]); then
     echo ""
     echo "========================================================"
-    echo "  ERRO DE REDE: Wi-Fi / Rede não disponível             "
-    echo "  Conecte o R36S a uma rede Wi-Fi e tente novamente.    "
+    echo "  AVISO: Wi-Fi / Rede não disponível                    "
+    echo "========================================================"
+    echo "  O console R36S não possui um endereço IP local ativo. "
+    echo "  Conecte o R36S ao Wi-Fi nas configurações do sistema  "
+    echo "  e execute o aplicativo novamente.                     "
     echo "========================================================"
     echo ""
-    exit 1
+    if command -v dialog >/dev/null 2>&1; then
+        dialog --title "Wi-Fi Nao Conectado" \
+               --msgbox "O R36S nao possui um IP local ativo.\n\nConecte o console ao Wi-Fi nas opcoes de rede do EmulationStation e execute o aplicativo novamente." 10 60
+    else
+        read -t 4 -p "Pressione qualquer tecla para voltar ao EmulationStation..." || true
+    fi
+    exit 0
 fi
 echo ">> IP Local: $LOCAL_IP"
 
 # ------------------------------------------------------------------------------
-# 5. TOKEN EFÊMERO & RAÍZES DE ARMAZENAMENTO (Sem Fallback Artificial para /roms)
+# 5. TOKEN EFÊMERO & RAÍZES DE ARMAZENAMENTO DINÂMICAS
 # ------------------------------------------------------------------------------
 AUTH_TOKEN=$("$PYTHON_BIN" -c "import secrets; print(secrets.token_hex(16))" 2>/dev/null || true)
 if [[ -z "$AUTH_TOKEN" ]] || [[ ${{#AUTH_TOKEN}} -lt 32 ]]; then
@@ -216,20 +269,33 @@ if [[ -z "$AUTH_TOKEN" ]] || [[ ${{#AUTH_TOKEN}} -lt 32 ]]; then
 fi
 
 STORAGE_ROOTS=()
-for r in "/roms" "/roms2" "/media" "/mnt"; do
-    if [[ -d "$r" ]]; then
-        STORAGE_ROOTS+=("$r")
-    fi
-done
+if [[ -n "${{TEST_OVERRIDE_ROOTS:-}}" ]]; then
+    for r in $TEST_OVERRIDE_ROOTS; do
+        if [[ -d "$r" ]]; then
+            STORAGE_ROOTS+=("$r")
+        fi
+    done
+else
+    for r in "/roms" "/roms2" "/media" "/mnt"; do
+        if [[ -d "$r" ]]; then
+            STORAGE_ROOTS+=("$r")
+        fi
+    done
+fi
 
 if [[ ${{#STORAGE_ROOTS[@]}} -eq 0 ]]; then
-    echo "ERRO CRÍTICO: Nenhum diretório de armazenamento válido encontrado (/roms, /roms2, /media, /mnt)."
-    echo "O R36S Web File Manager requer pelo menos uma raiz de armazenamento válida."
-    exit 1
+    echo "AVISO: Nenhum diretório de armazenamento válido encontrado (/roms, /roms2, /media, /mnt)."
+    if command -v dialog >/dev/null 2>&1; then
+        dialog --title "Armazenamento Indisponivel" \
+               --msgbox "Nenhum diretorio de armazenamento padrao (/roms, /roms2, /media, /mnt) foi encontrado no console." 8 60
+    else
+        read -t 4 -p "Pressione qualquer tecla para retornar ao EmulationStation..." || true
+    fi
+    exit 0
 fi
 
 # ------------------------------------------------------------------------------
-# 6. SELEÇÃO DINÂMICA DE PORTA (8080..8090) & HEALTH CHECK HTTP
+# 6. SELEÇÃO DINÂMICA DE PORTA (8080..8090) & HEALTH CHECK HTTP REAL
 # ------------------------------------------------------------------------------
 PORT=""
 SERVER_PID=""
@@ -240,10 +306,10 @@ for p in {{8080..8090}}; do
         continue
     fi
 
-    "$PYTHON_BIN" "$APP_DIR/server.py" \\
-        --port "$p" \\
-        --token "$AUTH_TOKEN" \\
-        --ui "$APP_DIR/ui.html" \\
+    "$PYTHON_BIN" "$APP_DIR/server.py" \
+        --port "$p" \
+        --token "$AUTH_TOKEN" \
+        --ui "$APP_DIR/ui.html" \
         --roots "${{STORAGE_ROOTS[@]}}" > "$APP_DIR/server.log" 2>&1 &
     
     CANDIDATE_PID=$!
@@ -290,24 +356,46 @@ if [[ "$HEALTHY" -ne 1 ]] || [[ -z "$PORT" ]]; then
 fi
 
 echo "$SERVER_PID" > "$APP_DIR/server.pid" 2>/dev/null || true
+echo "$PORT" > "$APP_DIR/server.port" 2>/dev/null || true
+echo "$AUTH_TOKEN" > "$APP_DIR/server.token" 2>/dev/null || true
 
 # ------------------------------------------------------------------------------
-# 7. MAPEAMENTO GPTOKEYB & LOOP INTERATIVO DIALOG / CONSOLE
+# 7. MAPEAMENTO GPTOKEYB & WATCHDOG DE SHUTDOWN REMOTO
 # ------------------------------------------------------------------------------
-export TERM=linux
+find_gptokeyb() {{
+    if command -v gptokeyb >/dev/null 2>&1; then
+        command -v gptokeyb
+        return 0
+    fi
+    for path in "/opt/inttools/gptokeyb" "/usr/bin/gptokeyb" "/opt/gptokeyb/gptokeyb" "/usr/local/bin/gptokeyb"; do
+        if [[ -x "$path" ]]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    return 1
+}}
+
+GPTOKEYB_BIN="$(find_gptokeyb || true)"
+GPTOKEYB_PID=""
+
+# Watchdog em segundo plano: se o servidor terminar remotamente via /api/shutdown,
+# o script principal é notificado para executar o cleanup e retornar ao EmulationStation.
+(
+    while kill -0 "$SERVER_PID" 2>/dev/null; do
+        sleep 1
+    done
+    kill -INT "$$" 2>/dev/null || true
+) 2>/dev/null &
+WATCHDOG_PID=$!
 
 if command -v dialog >/dev/null 2>&1; then
-    # Start gptokeyb monitoring "dialog"
-    if command -v gptokeyb >/dev/null 2>&1; then
-        gptokeyb "dialog" -c "$APP_DIR/controls.gptk" &
+    if [[ -n "$GPTOKEYB_BIN" ]]; then
+        "$GPTOKEYB_BIN" "dialog" -c "$APP_DIR/controls.gptk" &
         GPTOKEYB_PID=$!
-        echo ">> gptokeyb iniciado para dialog (PID: $GPTOKEYB_PID)."
-    elif [[ -x "/usr/bin/gptokeyb" ]]; then
-        /usr/bin/gptokeyb "dialog" -c "$APP_DIR/controls.gptk" &
-        GPTOKEYB_PID=$!
-        echo ">> gptokeyb iniciado para dialog (PID: $GPTOKEYB_PID)."
+        echo ">> gptokeyb iniciado para dialog ($GPTOKEYB_BIN, PID: $GPTOKEYB_PID)."
     else
-        echo "AVISO: gptokeyb nao encontrado. Gamepad desativado."
+        echo "AVISO: gptokeyb nao encontrado nos caminhos padroes (/opt/inttools, /usr/bin). Gamepad desativado."
     fi
 
     CONNECT_URL="http://$LOCAL_IP:$PORT/?token=$AUTH_TOKEN"
@@ -359,16 +447,12 @@ print(render_ansi_qr('$CONNECT_URL'))
         fi
     done
 else
-    # Fallback if dialog is not available
+    # Fallback caso dialog não esteja instalado
     echo "AVISO: dialog nao encontrado. Iniciando em modo CLI de compatibilidade."
-    if command -v gptokeyb >/dev/null 2>&1; then
-        gptokeyb -c "$APP_DIR/controls.gptk" -1 &
+    if [[ -n "$GPTOKEYB_BIN" ]]; then
+        "$GPTOKEYB_BIN" -c "$APP_DIR/controls.gptk" -1 &
         GPTOKEYB_PID=$!
-        echo ">> gptokeyb iniciado (PID: $GPTOKEYB_PID)."
-    elif [[ -x "/usr/bin/gptokeyb" ]]; then
-        /usr/bin/gptokeyb -c "$APP_DIR/controls.gptk" -1 &
-        GPTOKEYB_PID=$!
-        echo ">> gptokeyb iniciado em /usr/bin/gptokeyb (PID: $GPTOKEYB_PID)."
+        echo ">> gptokeyb iniciado em modo console ($GPTOKEYB_BIN, PID: $GPTOKEYB_PID)."
     fi
 
     clear || true
