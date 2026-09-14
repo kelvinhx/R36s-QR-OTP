@@ -851,30 +851,37 @@ def make_request_handler(backend: FileManagerBackend):
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
 
-            # 0. Static Assets (Icons, Branding, Sprites)
+            # 0. Static Assets (Icons, Branding, Sprites, Favicon)
+            if path in ("/favicon.ico", "/favicon.svg"):
+                path = "/assets/branding/favicon.svg"
+
             if path.startswith("/assets/"):
                 asset_rel = path[len("/assets/"):]
                 ui_dir = os.path.dirname(backend.ui_html_path)
+                assets_root = os.path.realpath(os.path.join(ui_dir, "assets"))
                 asset_full = os.path.normpath(os.path.join(ui_dir, "assets", asset_rel))
-                if not asset_full.startswith(os.path.realpath(os.path.join(ui_dir, "assets"))) or not os.path.isfile(asset_full):
+                real_asset = os.path.realpath(asset_full)
+                if not (real_asset == assets_root or real_asset.startswith(assets_root + os.sep)) or not os.path.isfile(real_asset):
                     self.send_response(404)
                     self.end_headers()
                     return
                 ct = "application/octet-stream"
-                if asset_full.endswith(".svg"):
+                if real_asset.endswith(".svg"):
                     ct = "image/svg+xml"
-                elif asset_full.endswith(".png"):
+                elif real_asset.endswith(".png"):
                     ct = "image/png"
-                elif asset_full.endswith(".css"):
+                elif real_asset.endswith(".css"):
                     ct = "text/css"
-                elif asset_full.endswith(".js"):
+                elif real_asset.endswith(".js"):
                     ct = "application/javascript"
                 
-                with open(asset_full, "rb") as f:
+                with open(real_asset, "rb") as f:
                     data = f.read()
                 self.send_response(200)
                 self.send_header("Content-Type", ct)
                 self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.send_header("X-Content-Type-Options", "nosniff")
                 self.end_headers()
                 self.wfile.write(data)
                 return
@@ -1611,8 +1618,8 @@ def encode_qr_matrix(text: str) -> list:
 
     return matrix
 
-def render_ansi_qr(text: str) -> str:
-    """Renders QR code with at least 4 modules quiet zone as requested."""
+def render_ansi_qr(text: str, center_width: int = 80) -> str:
+    """Renders QR code with at least 4 modules quiet zone as requested, centered for terminal width."""
     try:
         matrix = encode_qr_matrix(text)
         size = len(matrix)
@@ -1622,6 +1629,9 @@ def render_ansi_qr(text: str) -> str:
         for r in range(size):
             for c in range(size):
                 full_grid[r + quiet][c + quiet] = matrix[r][c]
+
+        indent = max(0, (center_width - padded_size) // 2) if center_width > padded_size else 0
+        indent_str = " " * indent
 
         lines = []
         for r in range(0, padded_size, 2):
@@ -1639,7 +1649,7 @@ def render_ansi_qr(text: str) -> str:
                     line_chars.append("▄")
                 else:
                     line_chars.append(" ")
-            lines.append("".join(line_chars))
+            lines.append(indent_str + "".join(line_chars))
         return "\n".join(lines)
     except Exception as e:
         return f"[ URL: {text} ]"

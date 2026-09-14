@@ -192,9 +192,9 @@ mkdir -p "$STAGING_DIR/assets"
 # Extrair controls.gptk
 "$PYTHON_BIN" -c "import base64; open('$STAGING_DIR/controls.gptk', 'wb').write(base64.b64decode('$CONTROLS_B64'))"
 # Extrair assets zip
-"$PYTHON_BIN" -c "
-import base64, zipfile, io
-b64_data = '$ASSETS_B64'
+echo "$ASSETS_B64" | "$PYTHON_BIN" -c "
+import sys, base64, zipfile, io
+b64_data = sys.stdin.read().strip()
 if b64_data:
     try:
         data = base64.b64decode(b64_data)
@@ -209,8 +209,16 @@ echo ">> Validando hashes SHA-256 do payload..."
 CALC_SERVER_SHA=$("$PYTHON_BIN" -c "import hashlib; print(hashlib.sha256(open('$STAGING_DIR/server.py','rb').read()).hexdigest())")
 CALC_UI_SHA=$("$PYTHON_BIN" -c "import hashlib; print(hashlib.sha256(open('$STAGING_DIR/ui.html','rb').read()).hexdigest())")
 CALC_CONTROLS_SHA=$("$PYTHON_BIN" -c "import hashlib; print(hashlib.sha256(open('$STAGING_DIR/controls.gptk','rb').read()).hexdigest())")
+CALC_ASSETS_SHA=""
+if [[ -n "$EXPECTED_ASSETS_SHA" ]] && [[ -n "$ASSETS_B64" ]]; then
+    CALC_ASSETS_SHA=$(echo "$ASSETS_B64" | "$PYTHON_BIN" -c "
+import sys, base64, hashlib
+b64 = sys.stdin.read().strip()
+print(hashlib.sha256(base64.b64decode(b64)).hexdigest() if b64 else '')
+")
+fi
 
-if [[ "$CALC_SERVER_SHA" != "$EXPECTED_SERVER_SHA" ]] || [[ "$CALC_UI_SHA" != "$EXPECTED_UI_SHA" ]] || [[ "$CALC_CONTROLS_SHA" != "$EXPECTED_CONTROLS_SHA" ]]; then
+if [[ "$CALC_SERVER_SHA" != "$EXPECTED_SERVER_SHA" ]] || [[ "$CALC_UI_SHA" != "$EXPECTED_UI_SHA" ]] || [[ "$CALC_CONTROLS_SHA" != "$EXPECTED_CONTROLS_SHA" ]] || ([[ -n "$EXPECTED_ASSETS_SHA" ]] && [[ "$CALC_ASSETS_SHA" != "$EXPECTED_ASSETS_SHA" ]]); then
     echo "ERRO CRÍTICO DE INTEGRIDADE: Falha na validação SHA-256 do payload!"
     rm -rf "$STAGING_DIR"
     exit 1
@@ -417,22 +425,15 @@ if command -v dialog >/dev/null 2>&1; then
             fi
         elif [[ "$CHOICE" == "1" ]]; then
             clear
-            echo "========================================================"
-            echo "             ESCANEE O QR CODE PARA CONECTAR            "
-            echo "========================================================"
-            echo ""
+            echo "=== R36S WEB FILE MANAGER: ESCANEE PARA CONECTAR ==="
             echo "  URL: $CONNECT_URL"
-            echo ""
             "$PYTHON_BIN" -c "
 import sys
 sys.path.insert(0, '$APP_DIR')
 from server import render_ansi_qr
 print(render_ansi_qr('$CONNECT_URL'))
 "
-            echo ""
-            echo "--------------------------------------------------------"
-            echo " Pressione qualquer tecla ou botao B para voltar ao menu"
-            echo "--------------------------------------------------------"
+            echo "  [ Pressione qualquer tecla ou Botao B para voltar ]"
             read -n 1 -s -r
         elif [[ "$CHOICE" == "2" ]]; then
             ROOTS_STR=""

@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>R36S Web File Manager • iOS Files</title>
+  <title>R36S Web File Manager • dArkOS RE</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/branding/favicon.svg">
   <style>
     :root {
       --bg: #08070b;
@@ -494,13 +495,16 @@
     </div>
     <div class="header-actions">
       <button class="btn" id="btnNewFolder" title="Criar Nova Pasta">
-        <span>📁 Nova Pasta</span>
+        <img src="/assets/actions/new_folder.svg" width="16" height="16" alt="">
+        <span>Nova Pasta</span>
       </button>
       <button class="btn btn-primary" id="btnUpload" title="Enviar Arquivos">
-        <span>📤 Enviar</span>
+        <img src="/assets/actions/upload.svg" width="16" height="16" alt="">
+        <span>Enviar</span>
       </button>
       <button class="btn btn-danger" id="btnShutdown" title="Encerrar Servidor">
-        <span>⏹ Sair</span>
+        <img src="/assets/status/error.svg" width="16" height="16" alt="">
+        <span>Sair</span>
       </button>
     </div>
   </header>
@@ -514,7 +518,9 @@
   <div class="clipboard-bar" id="clipboardBar">
     <span id="clipboardText">1 item na área de transferência</span>
     <div class="clipboard-actions">
-      <button class="btn btn-primary" id="btnPaste" style="padding: 4px 10px; font-size: 0.75rem;">Colar Aqui</button>
+      <button class="btn btn-primary" id="btnPaste" style="padding: 4px 10px; font-size: 0.75rem;">
+        <img src="/assets/actions/copy.svg" width="12" height="12" alt=""> Colar Aqui
+      </button>
       <button class="btn" id="btnClearClipboard" style="padding: 4px 10px; font-size: 0.75rem;">Limpar</button>
     </div>
   </div>
@@ -528,7 +534,7 @@
       </div>
       <div class="toolbar-actions">
         <div class="search-box">
-          <span>🔍</span>
+          <img src="/assets/navigation/search.svg" width="15" height="15" style="opacity: 0.6; flex-shrink: 0;" alt="">
           <input type="text" id="searchInput" placeholder="Pesquisar arquivos...">
         </div>
         <button class="btn" id="btnSelectAll" title="Selecionar Todos">✓ Todos</button>
@@ -538,7 +544,10 @@
     <!-- Live Transfer Progress Panel -->
     <div class="progress-panel" id="progressPanel">
       <div class="progress-header">
-        <span id="progressTitle">Enviando arquivos...</span>
+        <span id="progressTitle" style="display: flex; align-items: center; gap: 8px;">
+          <img src="/assets/transfer/progress.svg" width="16" height="16" alt="">
+          <span>Enviando arquivos...</span>
+        </span>
         <span id="progressPercent">0%</span>
       </div>
       <div class="progress-track">
@@ -546,7 +555,10 @@
       </div>
       <div class="progress-footer">
         <span id="progressBytes">0 MB / 0 MB</span>
-        <span id="progressSpeed">0 KB/s</span>
+        <span id="progressSpeed" style="display: flex; align-items: center; gap: 5px;">
+          <img src="/assets/transfer/speed.svg" width="14" height="14" alt="">
+          <span>0 KB/s</span>
+        </span>
       </div>
     </div>
 
@@ -565,7 +577,7 @@
         <tbody id="fileTableBody">
           <tr>
             <td colspan="5" class="empty-state">
-              <div class="empty-icon">📂</div>
+              <div class="empty-icon"><img src="/assets/icons/folder_open.svg" width="48" height="48" style="opacity: 0.35;" alt=""></div>
               <div>Carregando diretório...</div>
             </td>
           </tr>
@@ -578,10 +590,22 @@
   <div class="batch-bar" id="batchBar">
     <div class="batch-count" id="batchCount">0 selecionados</div>
     <div class="batch-buttons">
-      <button class="btn" id="btnCopySelected">📋 Copiar</button>
-      <button class="btn" id="btnMoveSelected">✂ Mover</button>
-      <button class="btn btn-primary" id="btnDownloadSelected">📦 Baixar ZIP</button>
-      <button class="btn btn-danger" id="btnDeleteSelected">🗑 Excluir</button>
+      <button class="btn" id="btnCopySelected">
+        <img src="/assets/actions/copy.svg" width="15" height="15" alt="">
+        <span>Copiar</span>
+      </button>
+      <button class="btn" id="btnMoveSelected">
+        <img src="/assets/actions/move.svg" width="15" height="15" alt="">
+        <span>Mover</span>
+      </button>
+      <button class="btn btn-primary" id="btnDownloadSelected">
+        <img src="/assets/actions/zip.svg" width="15" height="15" alt="">
+        <span>Baixar ZIP</span>
+      </button>
+      <button class="btn btn-danger" id="btnDeleteSelected">
+        <img src="/assets/actions/delete.svg" width="15" height="15" alt="">
+        <span>Excluir</span>
+      </button>
     </div>
   </div>
 
@@ -643,43 +667,58 @@
         return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
       }
 
-      // ROM Extension Recognition
+      // ROM Extension & Console Mapping
       const romExtensions = {
         'gb': 'GB', 'gbc': 'GBC', 'gba': 'GBA', 'nes': 'NES', 'snes': 'SNES',
         'smc': 'SNES', 'sfc': 'SNES', 'n64': 'N64', 'z64': 'N64', 'v64': 'N64',
         'ps1': 'PS1', 'iso': 'ISO', 'bin': 'BIN', 'cue': 'CUE', 'psp': 'PSP',
         'nds': 'NDS', 'gen': 'GEN', 'md': 'MD', 'sms': 'SMS', 'gg': 'GG',
-        'zip': 'ZIP', 'rar': 'RAR', '7z': '7Z', 'gba': 'GBA'
+        'zip': 'ZIP', 'rar': 'RAR', '7z': '7Z'
+      };
+
+      const systemIcons = {
+        'gba': 'gba.svg', 'gb': 'gb.svg', 'gbc': 'gb.svg',
+        'snes': 'snes.svg', 'sfc': 'snes.svg', 'smc': 'snes.svg',
+        'nes': 'nes.svg', 'fc': 'nes.svg',
+        'n64': 'n64.svg', 'z64': 'n64.svg', 'v64': 'n64.svg',
+        'nds': 'nds.svg',
+        'ps1': 'ps1.svg', 'psx': 'ps1.svg',
+        'psp': 'psp.svg',
+        'megadrive': 'megadrive.svg', 'md': 'megadrive.svg', 'gen': 'megadrive.svg',
+        'arcade': 'arcade.svg', 'mame': 'arcade.svg', 'fba': 'arcade.svg'
       };
 
       function getFileIcon(name, isDir) {
         if (isDir) {
           const lower = name.toLowerCase();
-          if (['gba', 'gb', 'snes', 'nes', 'n64', 'nds', 'ps1', 'psp', 'megadrive', 'arcade'].includes(lower)) {
-            return { icon: '<img src="/assets/icons/folder_rom.svg" width="20" height="20">', class: 'icon-folder', badge: lower.toUpperCase() };
+          if (systemIcons[lower]) {
+            return { icon: `<img src="/assets/systems/${systemIcons[lower]}" width="22" height="22" alt="">`, class: 'icon-folder', badge: lower.toUpperCase() };
           }
-          return { icon: '<img src="/assets/icons/folder.svg" width="20" height="20">', class: 'icon-folder' };
+          return { icon: '<img src="/assets/icons/folder.svg" width="20" height="20" alt="">', class: 'icon-folder' };
         }
         const ext = name.split('.').pop().toLowerCase();
+        if (systemIcons[ext]) {
+          return { icon: `<img src="/assets/systems/${systemIcons[ext]}" width="22" height="22" alt="">`, class: 'icon-rom', badge: systemIcons[ext].replace('.svg', '').toUpperCase() };
+        }
         if (romExtensions[ext]) {
-          return { icon: '<img src="/assets/icons/file_rom.svg" width="20" height="20">', class: 'icon-rom', badge: romExtensions[ext] };
+          return { icon: '<img src="/assets/icons/file_rom.svg" width="20" height="20" alt="">', class: 'icon-rom', badge: romExtensions[ext] };
         }
         if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
-          return { icon: '<img src="/assets/icons/file_zip.svg" width="20" height="20">', class: 'icon-archive', badge: ext.toUpperCase() };
+          return { icon: '<img src="/assets/icons/file_zip.svg" width="20" height="20" alt="">', class: 'icon-archive', badge: ext.toUpperCase() };
         }
         if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
-          return { icon: '<img src="/assets/icons/file_image.svg" width="20" height="20">', class: 'icon-image' };
+          return { icon: '<img src="/assets/icons/file_image.svg" width="20" height="20" alt="">', class: 'icon-image' };
         }
         if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) {
-          return { icon: '<img src="/assets/icons/file_audio.svg" width="20" height="20">', class: 'icon-audio' };
+          return { icon: '<img src="/assets/icons/file_audio.svg" width="20" height="20" alt="">', class: 'icon-audio' };
         }
         if (['mp4', 'mkv', 'avi', 'webm'].includes(ext)) {
-          return { icon: '<img src="/assets/icons/file_video.svg" width="20" height="20">', class: 'icon-video' };
+          return { icon: '<img src="/assets/icons/file_video.svg" width="20" height="20" alt="">', class: 'icon-video' };
         }
         if (['txt', 'log', 'cfg', 'ini', 'gptk'].includes(ext)) {
-          return { icon: '<img src="/assets/icons/file_text.svg" width="20" height="20">', class: 'icon-text' };
+          return { icon: '<img src="/assets/icons/file_text.svg" width="20" height="20" alt="">', class: 'icon-text' };
         }
-        return { icon: '<img src="/assets/icons/file_generic.svg" width="20" height="20">', class: 'icon-file' };
+        return { icon: '<img src="/assets/icons/file_generic.svg" width="20" height="20" alt="">', class: 'icon-file' };
       }
 
       // Load Storage Roots
@@ -705,7 +744,13 @@
         storageRoots.forEach(root => {
           const pill = document.createElement('div');
           pill.className = `storage-pill ${currentPath.startsWith(root.path) ? 'active' : ''}`;
-          pill.innerHTML = `<img src="/assets/storage/sd.svg" width="16" height="16" style="vertical-align: middle; margin-right: 6px;"> <strong>${root.name || root.path}</strong> <span style="opacity: 0.6; font-size: 0.75rem;">(${formatSize(root.free_space)} livres)</span>`;
+          let icon = '/assets/storage/sd.svg';
+          if (root.path.includes('/media') || (root.name && root.name.toLowerCase().includes('usb'))) {
+            icon = '/assets/storage/usb.svg';
+          } else if (root.path === '/' || root.path.startsWith('/mnt')) {
+            icon = '/assets/storage/server.svg';
+          }
+          pill.innerHTML = `<img src="${icon}" width="16" height="16" style="vertical-align: middle; margin-right: 6px;" alt=""> <strong>${root.name || root.path}</strong> <span style="opacity: 0.6; font-size: 0.75rem;">(${formatSize(root.free_space)} livres)</span>`;
           pill.onclick = () => {
             currentPath = root.path;
             selectedPaths.clear();
@@ -743,7 +788,7 @@
         let accumulated = '';
         const rootItem = document.createElement('span');
         rootItem.className = `breadcrumb-item ${parts.length === 0 ? 'active' : ''}`;
-        rootItem.innerHTML = '🏠 /';
+        rootItem.innerHTML = '<img src="/assets/navigation/home.svg" width="14" height="14" style="vertical-align: middle; margin-right: 4px;" alt=""> /';
         rootItem.onclick = () => loadDirectory('/');
         container.appendChild(rootItem);
 
@@ -773,7 +818,7 @@
           tbody.innerHTML = `
             <tr>
               <td colspan="5" class="empty-state">
-                <div class="empty-icon">📭</div>
+                <div class="empty-icon"><img src="/assets/icons/folder_open.svg" width="48" height="48" style="opacity: 0.35;" alt=""></div>
                 <div>Pasta vazia ou nenhum arquivo encontrado.</div>
               </td>
             </tr>
@@ -804,9 +849,9 @@
             <td class="file-meta">${formatDate(file.mtime)}</td>
             <td style="text-align: right;">
               <div class="file-actions">
-                ${!file.is_dir ? `<button class="btn" title="Baixar" onclick="event.stopPropagation(); downloadFile('${file.path}')">⬇</button>` : ''}
-                <button class="btn" title="Renomear" onclick="event.stopPropagation(); promptRename('${file.path}', '${file.name}')">✏</button>
-                <button class="btn btn-danger" title="Excluir" onclick="event.stopPropagation(); deleteSingle('${file.path}')">🗑</button>
+                ${!file.is_dir ? `<button class="btn" title="Baixar" onclick="event.stopPropagation(); downloadFile('${file.path}')"><img src="/assets/actions/download.svg" width="14" height="14" alt="Baixar"></button>` : ''}
+                <button class="btn" title="Renomear" onclick="event.stopPropagation(); promptRename('${file.path}', '${file.name}')"><img src="/assets/actions/rename.svg" width="14" height="14" alt="Renomear"></button>
+                <button class="btn btn-danger" title="Excluir" onclick="event.stopPropagation(); deleteSingle('${file.path}')"><img src="/assets/actions/delete.svg" width="14" height="14" alt="Excluir"></button>
               </div>
             </td>
           `;
