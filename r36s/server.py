@@ -15,6 +15,7 @@ import shutil
 import hashlib
 import zipfile
 import threading
+import stat
 import urllib.parse
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Dict, Any, List, Optional, Tuple
@@ -22,7 +23,8 @@ from typing import Dict, Any, List, Optional, Tuple
 SERVER_VERSION = "2.0.0-final"
 CHUNK_SIZE_DEFAULT = 2 * 1024 * 1024  # 2 MB
 DEFAULT_SESSION_TTL_SECONDS = 7200     # 2 hours
-DOWNLOAD_TICKET_TTL_SECONDS = 180      # 3 minutes
+DOWNLOAD_TICKET_TTL_SECONDS = 300      # 5 minutes
+SYSTEM_FORBIDDEN_ROOTS = {"/", "/etc", "/proc", "/sys", "/dev", "/boot", "/root", "/bin", "/sbin", "/lib", "/lib64", "/usr", "/var"}
 
 class UploadSession:
     """
@@ -315,7 +317,9 @@ class FileManagerBackend:
                 continue
             if os.path.exists(r) and os.path.isdir(r):
                 real_r = os.path.realpath(r)
-                if real_r not in self.allowed_roots and real_r != "/" and real_r != cwd_real:
+                if (real_r not in self.allowed_roots and real_r != "/" and real_r != cwd_real and
+                    real_r not in SYSTEM_FORBIDDEN_ROOTS and
+                    not any(real_r == fb or real_r.startswith(fb + os.sep) for fb in SYSTEM_FORBIDDEN_ROOTS)):
                     self.allowed_roots.append(real_r)
 
         # Rejection if no valid authorized root exists
@@ -453,10 +457,16 @@ class FileManagerBackend:
             except Exception:
                 pass
 
+        cwd_real = os.path.realpath(".")
         for c in candidates:
             if os.path.exists(c):
                 real_c = os.path.realpath(c)
                 if os.path.isdir(real_c):
+                    # Strict security check: reject root, current working dir, and system forbidden paths
+                    if (real_c == "/" or real_c == cwd_real or real_c in SYSTEM_FORBIDDEN_ROOTS or
+                        any(real_c == fb or real_c.startswith(fb + os.sep) for fb in SYSTEM_FORBIDDEN_ROOTS)):
+                        continue
+
                     try:
                         total, used, free = shutil.disk_usage(real_c)
                     except Exception:
@@ -480,6 +490,33 @@ class FileManagerBackend:
                     })
                     if real_c not in self.allowed_roots:
                         self.allowed_roots.append(real_c)
+
+                    # For /media and /mnt, also scan child mount points (e.g. /media/usb0, /mnt/sdcard)
+                    if c in ("/media", "/mnt"):
+                        try:
+                            for sub in sorted(os.listdir(real_c)):
+                                sub_path = os.path.join(real_c, sub)
+                                if os.path.isdir(sub_path) and not os.path.islink(sub_path):
+                                    real_sub = os.path.realpath(sub_path)
+                                    if (real_sub != "/" and real_sub != cwd_real and
+                                        real_sub not in SYSTEM_FORBIDDEN_ROOTS and
+                                        not any(real_sub == fb or real_sub.startswith(fb + os.sep) for fb in SYSTEM_FORBIDDEN_ROOTS)):
+                                        try:
+                                            s_tot, s_used, s_free = shutil.disk_usage(real_sub)
+                                        except Exception:
+                                            s_tot, s_used, s_free = (0, 0, 0)
+                                        detected.append({
+                                            "path": real_sub,
+                                            "display_name": f"USB ({sub})",
+                                            "fstype": mounts_map.get(sub_path, "fat/exfat"),
+                                            "total_bytes": s_tot,
+                                            "free_bytes": s_free,
+                                            "used_bytes": s_used
+                                        })
+                                        if real_sub not in self.allowed_roots:
+                                            self.allowed_roots.append(real_sub)
+                        except Exception:
+                            pass
 
         # Fallback to configured allowed_roots if candidates aren't standard
         if not detected and self.allowed_roots:
@@ -518,15 +555,28 @@ class FileManagerBackend:
 
         # Normalize backslashes and redundant separators
         target_path = target_path.replace("\\", "/")
-        unquoted = urllib.parse.unquote(target_path)
-        if ".." in unquoted.split("/"):
-            # Traversal attempt detected
-            pass
+        
+        # Multi-pass URL decode to eliminate nested/double-encoded traversal attempts (%252e, etc.)
+        unquoted = target_path
+        for _ in range(3):
+            prev = unquoted
+            unquoted = urllib.parse.unquote(unquoted)
+            if unquoted == prev:
+                break
+        unquoted = unquoted.replace("\\", "/")
+
+        # Strict rejection of path traversal components
+        raw_segments = [s for s in target_path.split("/") if s]
+        decoded_segments = [s for s in unquoted.split("/") if s]
+        if ".." in raw_segments or ".." in decoded_segments or any(seg == ".." for seg in decoded_segments):
+            raise PermissionError("Acesso negado: tentativa de path traversal detectada ('..')")
+        if any(seg.startswith("..") or seg.endswith("..") for seg in decoded_segments):
+            raise PermissionError("Acesso negado: tentativa de path traversal detectada ('..')")
 
         # For write/create operations (where leaf file may not exist yet)
         if is_write_operation:
             clean_leaf = os.path.basename(target_path)
-            if not clean_leaf or clean_leaf in (".", "..") or "/" in clean_leaf or "\\" in clean_leaf:
+            if not clean_leaf or clean_leaf in (".", "..") or "/" in clean_leaf or "\\" in clean_leaf or ".." in clean_leaf:
                 raise ValueError(f"Nome de arquivo ou diretório inválido: '{clean_leaf}'")
 
             parent_dir = os.path.dirname(target_path) or "."
@@ -545,6 +595,10 @@ class FileManagerBackend:
         if not allow_symlinks_in_leaf and (os.path.islink(target_path) or os.path.islink(canonical_target)):
             raise PermissionError("Links simbólicos não são permitidos nesta operação")
 
+        # Never allow the root of the filesystem
+        if canonical_target == "/":
+            raise PermissionError("Acesso negado: diretório raiz do sistema ('/') proibido")
+
         is_safe = False
         for root in self.allowed_roots:
             canonical_root = os.path.realpath(root)
@@ -556,7 +610,7 @@ class FileManagerBackend:
             raise PermissionError("Acesso negado: o caminho solicitado está fora das raízes de armazenamento autorizadas")
 
         # Explicit blacklist of critical Linux system paths
-        forbidden_prefixes = ["/etc", "/proc", "/sys", "/dev", "/boot", "/root", "/bin", "/sbin", "/lib", "/usr"]
+        forbidden_prefixes = ["/etc", "/proc", "/sys", "/dev", "/boot", "/root", "/bin", "/sbin", "/lib", "/lib64", "/usr", "/var"]
         for fb in forbidden_prefixes:
             if canonical_target == fb or canonical_target.startswith(fb + os.sep):
                 raise PermissionError("Acesso negado a diretórios do sistema operacional")
@@ -776,6 +830,137 @@ class FileManagerBackend:
         ticket = self.create_download_ticket(zip_path, is_temp_zip=True)
         return zip_path, ticket
 
+    def extract_archive_sync(self, archive_path: str, dest_dir: Optional[str] = None, progress_callback=None) -> Dict[str, Any]:
+        """
+        Extrai com segurança arquivos de um arquivo compactado .zip para um diretório no console R36S.
+        Proteção estrita anti-Zip-Slip: nenhum arquivo pode ser escrito fora de safe_dest.
+        Symlinks internos contidos no zip são ignorados por segurança do sistema.
+        """
+        if not archive_path:
+            raise ValueError("Caminho do arquivo compactado não fornecido")
+
+        safe_archive = self.validate_safe_path(archive_path)
+        if not os.path.isfile(safe_archive) or os.path.islink(safe_archive):
+            raise FileNotFoundError("Arquivo compactado não encontrado ou inválido")
+
+        if not zipfile.is_zipfile(safe_archive):
+            raise ValueError("O arquivo selecionado não é um arquivo ZIP válido")
+
+        if not dest_dir:
+            dest_dir = os.path.dirname(safe_archive)
+
+        safe_dest = self.validate_safe_path(dest_dir, is_write_operation=True)
+        if not os.path.isdir(safe_dest):
+            os.makedirs(safe_dest, exist_ok=True)
+
+        if progress_callback:
+            progress_callback("Lendo conteúdo do arquivo compactado...")
+
+        extracted_count = 0
+        total_extracted_bytes = 0
+
+        with zipfile.ZipFile(safe_archive, "r") as zf:
+            members = zf.infolist()
+            total_members = len(members)
+
+            # Verificação preventiva rigorosa anti-Zip-Slip para TODOS os membros antes de extrair
+            for m in members:
+                norm_name = os.path.normpath(m.filename)
+                if norm_name.startswith(("/", "\\")) or ".." in norm_name.split(os.sep) or ".." in norm_name.split("/"):
+                    raise ValueError(f"Violação de segurança (Zip-Slip detectado): {m.filename}")
+                dest_path = os.path.normpath(os.path.join(safe_dest, norm_name))
+                if not (dest_path == safe_dest or dest_path.startswith(safe_dest + os.sep)):
+                    raise ValueError(f"Caminho de extração fora do diretório permitido: {m.filename}")
+
+            for idx, member in enumerate(members):
+                norm_name = os.path.normpath(member.filename)
+                if norm_name in (".", ""):
+                    continue
+
+                dest_path = os.path.normpath(os.path.join(safe_dest, norm_name))
+
+                if progress_callback and (idx % 5 == 0 or idx == total_members - 1):
+                    progress_callback(f"Extraindo [{idx + 1}/{total_members}]: {os.path.basename(norm_name)}...")
+
+                if member.is_dir() or member.filename.endswith("/"):
+                    os.makedirs(dest_path, exist_ok=True)
+                else:
+                    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                    # Não extrair symlinks com atributos especiais Unix (previne symlink injection)
+                    attr = member.external_attr >> 16
+                    if stat.S_ISLNK(attr):
+                        continue
+
+                    with zf.open(member, "r") as source_fp, open(dest_path, "wb") as target_fp:
+                        shutil.copyfileobj(source_fp, target_fp, length=64 * 1024)
+                    extracted_count += 1
+                    total_extracted_bytes += member.file_size
+
+        return {
+            "success": True,
+            "archive": os.path.basename(safe_archive),
+            "dest_dir": safe_dest,
+            "extracted_files": extracted_count,
+            "extracted_bytes": total_extracted_bytes
+        }
+
+    def get_quick_shortcuts(self) -> List[Dict[str, str]]:
+        """
+        Detecta e retorna atalhos rápidos de emuladores e diretórios de jogos comuns no console R36S.
+        """
+        system_map = [
+            ({"gba"}, "Game Boy Advance", "gba.svg"),
+            ({"snes", "sfc"}, "Super Nintendo", "snes.svg"),
+            ({"nes", "fc", "famicom"}, "Nintendo (NES)", "nes.svg"),
+            ({"psx", "ps1", "ps"}, "PlayStation (PS1)", "ps1.svg"),
+            ({"psp"}, "PlayStation Portable", "psp.svg"),
+            ({"n64"}, "Nintendo 64", "n64.svg"),
+            ({"nds"}, "Nintendo DS", "nds.svg"),
+            ({"megadrive", "genesis", "md"}, "Mega Drive", "megadrive.svg"),
+            ({"arcade", "mame", "fbneo", "fba"}, "Arcade / Fliperama", "arcade.svg"),
+            ({"gb"}, "Game Boy", "gb.svg"),
+            ({"gbc"}, "Game Boy Color", "gb.svg"),
+        ]
+
+        shortcuts = []
+        found_paths = set()
+
+        for root in self.allowed_roots:
+            if not os.path.isdir(root):
+                continue
+            # Verificar diretórios imediatos e subpastas de roms
+            scan_dirs = [root]
+            roms_sub = os.path.join(root, "roms")
+            if os.path.isdir(roms_sub):
+                scan_dirs.append(roms_sub)
+
+            for scan_dir in scan_dirs:
+                try:
+                    entries = os.listdir(scan_dir)
+                except Exception:
+                    continue
+
+                for entry in entries:
+                    entry_path = os.path.join(scan_dir, entry)
+                    if not os.path.isdir(entry_path):
+                        continue
+                    entry_lower = entry.lower()
+
+                    for names, display_title, icon_name in system_map:
+                        if entry_lower in names:
+                            real_p = os.path.realpath(entry_path)
+                            if real_p not in found_paths:
+                                found_paths.add(real_p)
+                                shortcuts.append({
+                                    "id": entry_lower,
+                                    "name": display_title,
+                                    "path": entry_path,
+                                    "icon": f"/assets/systems/{icon_name}"
+                                })
+                            break
+
+        return shortcuts
+
 
 def make_request_handler(backend: FileManagerBackend):
     class R36SRequestHandler(BaseHTTPRequestHandler):
@@ -854,6 +1039,18 @@ def make_request_handler(backend: FileManagerBackend):
             # 0. Static Assets (Icons, Branding, Sprites, Favicon)
             if path in ("/favicon.ico", "/favicon.svg"):
                 path = "/assets/branding/favicon.svg"
+
+            # Lightweight Heartbeat & Healthcheck Ping
+            if path == "/api/ping":
+                uptime_sec = int(time.time() - backend.start_time)
+                self.send_json(200, {
+                    "success": True,
+                    "status": "online",
+                    "uptime_seconds": uptime_sec,
+                    "version": SERVER_VERSION,
+                    "timestamp": time.time()
+                })
+                return
 
             if path.startswith("/assets/"):
                 asset_rel = path[len("/assets/"):]
@@ -935,23 +1132,36 @@ def make_request_handler(backend: FileManagerBackend):
                     status_code = 200
 
                     if range_header and range_header.startswith("bytes="):
-                        ranges = range_header[6:].split("-")
-                        try:
-                            if ranges[0]:
-                                start = int(ranges[0])
-                            if len(ranges) > 1 and ranges[1]:
-                                end = int(ranges[1])
-                            status_code = 206
-                        except ValueError:
-                            pass
+                        spec = range_header[6:].strip()
+                        if "-" in spec:
+                            r_parts = spec.split("-", 1)
+                            try:
+                                if r_parts[0] and r_parts[1]:
+                                    start = int(r_parts[0])
+                                    end = int(r_parts[1])
+                                elif r_parts[0] and not r_parts[1]:
+                                    start = int(r_parts[0])
+                                    end = file_size - 1
+                                elif not r_parts[0] and r_parts[1]:
+                                    suffix_len = int(r_parts[1])
+                                    start = max(0, file_size - suffix_len)
+                                    end = file_size - 1
+                                if end >= file_size:
+                                    end = file_size - 1
+                                status_code = 206
+                            except ValueError:
+                                status_code = 200
+                                start = 0
+                                end = file_size - 1
 
-                    if start > end or start >= file_size:
+                    if file_size > 0 and (start > end or start >= file_size):
                         self.send_response(416)
                         self.send_header("Content-Range", f"bytes */{file_size}")
+                        self.send_header("Content-Length", "0")
                         self.end_headers()
                         return
 
-                    content_length = end - start + 1
+                    content_length = max(0, end - start + 1)
                     self.send_response(status_code)
                     self.send_header("Content-Type", "application/octet-stream")
                     self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{encoded_filename}")
@@ -975,15 +1185,20 @@ def make_request_handler(backend: FileManagerBackend):
                             self.wfile.write(chunk)
                             remaining -= len(chunk)
 
-                    # Consume ticket if not partial range or upon completion
-                    backend.consume_download_ticket(ticket_id)
+                    # Only consume the ticket on full completion:
+                    # 1. status_code == 200 (full file streamed)
+                    # 2. status_code == 206 AND the range served covered the entire file (start == 0 and end == file_size - 1)
+                    # For partial ranges (Safari/iOS probes, multi-part downloads), ticket is preserved!
+                    is_full_completion = (status_code == 200) or (status_code == 206 and start == 0 and end == file_size - 1)
+                    if is_full_completion:
+                        backend.consume_download_ticket(ticket_id)
 
-                    # If temporary ZIP, purge it immediately from disk
-                    if is_temp_zip and os.path.exists(safe_path):
-                        try:
-                            os.unlink(safe_path)
-                        except OSError:
-                            pass
+                        # If temporary ZIP, purge it immediately from disk upon full completion
+                        if is_temp_zip and os.path.exists(safe_path):
+                            try:
+                                os.unlink(safe_path)
+                            except OSError:
+                                pass
                 except Exception as e:
                     self.send_error_json(500, "Erro durante transferência do arquivo")
                 return
@@ -1012,23 +1227,36 @@ def make_request_handler(backend: FileManagerBackend):
                     status_code = 200
 
                     if range_header and range_header.startswith("bytes="):
-                        ranges = range_header[6:].split("-")
-                        try:
-                            if ranges[0]:
-                                start = int(ranges[0])
-                            if len(ranges) > 1 and ranges[1]:
-                                end = int(ranges[1])
-                            status_code = 206
-                        except ValueError:
-                            pass
+                        spec = range_header[6:].strip()
+                        if "-" in spec:
+                            r_parts = spec.split("-", 1)
+                            try:
+                                if r_parts[0] and r_parts[1]:
+                                    start = int(r_parts[0])
+                                    end = int(r_parts[1])
+                                elif r_parts[0] and not r_parts[1]:
+                                    start = int(r_parts[0])
+                                    end = file_size - 1
+                                elif not r_parts[0] and r_parts[1]:
+                                    suffix_len = int(r_parts[1])
+                                    start = max(0, file_size - suffix_len)
+                                    end = file_size - 1
+                                if end >= file_size:
+                                    end = file_size - 1
+                                status_code = 206
+                            except ValueError:
+                                status_code = 200
+                                start = 0
+                                end = file_size - 1
 
-                    if start > end or start >= file_size:
+                    if file_size > 0 and (start > end or start >= file_size):
                         self.send_response(416)
                         self.send_header("Content-Range", f"bytes */{file_size}")
+                        self.send_header("Content-Length", "0")
                         self.end_headers()
                         return
 
-                    content_length = end - start + 1
+                    content_length = max(0, end - start + 1)
                     self.send_response(status_code)
                     self.send_header("Content-Type", "application/octet-stream")
                     self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{encoded_filename}")
@@ -1103,6 +1331,12 @@ def make_request_handler(backend: FileManagerBackend):
                     "roots_count": len(backend.allowed_roots),
                     "active_uploads": len(backend.upload_sessions)
                 })
+                return
+
+            # Quick Shortcuts (Consoles / Emulator Folders)
+            if path == "/api/quick-access":
+                shortcuts = backend.get_quick_shortcuts()
+                self.send_json(200, {"success": True, "shortcuts": shortcuts})
                 return
 
             # 7. List Directory
@@ -1349,6 +1583,16 @@ def make_request_handler(backend: FileManagerBackend):
                         self.send_json(200, {"success": True, "task_id": tid})
                         return
 
+                    elif action == "extract":
+                        archive = payload.get("archive_path")
+                        dest_dir = payload.get("dest_dir")
+                        tid = backend.task_manager.start_task(
+                            "extract",
+                            lambda cb: backend.extract_archive_sync(archive, dest_dir, cb)
+                        )
+                        self.send_json(200, {"success": True, "task_id": tid})
+                        return
+
                     else:
                         raise ValueError(f"Ação desconhecida: {action}")
                 except Exception as e:
@@ -1363,6 +1607,18 @@ def make_request_handler(backend: FileManagerBackend):
                     name = payload.get("name")
                     new_dir = backend.make_directory(parent, name)
                     self.send_json(200, {"success": True, "created": new_dir})
+                except Exception as e:
+                    self.send_error_json(400, str(e))
+                return
+
+            # 8. Extract Archive (Synchronous)
+            if path == "/api/fs/extract":
+                try:
+                    payload = read_json_body()
+                    archive = payload.get("archive_path")
+                    dest = payload.get("dest_dir")
+                    res = backend.extract_archive_sync(archive, dest)
+                    self.send_json(200, {"success": True, "result": res})
                 except Exception as e:
                     self.send_error_json(400, str(e))
                 return

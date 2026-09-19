@@ -40,13 +40,76 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
+      background-color: var(--bg);
+      background-image: url('/assets/backgrounds/grid_pattern.svg'), radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.12), transparent 70%);
+      background-repeat: repeat, no-repeat;
+      background-position: top center, top center;
+      background-size: 32px 32px, 100% 450px;
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       overflow-x: hidden;
       transform: translateZ(0); /* Promote body layer */
+      position: relative;
+    }
+
+    .decorative-glow {
+      position: fixed;
+      top: -120px;
+      right: -100px;
+      width: 400px;
+      height: 400px;
+      background: url('/assets/decorative/glow_orb.svg') no-repeat center;
+      background-size: contain;
+      pointer-events: none;
+      opacity: 0.35;
+      z-index: 0;
+    }
+
+    .wifi-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 6px;
+      opacity: 0.8;
+      vertical-align: middle;
+    }
+
+    .nav-history-buttons {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .btn-icon {
+      padding: 6px 10px;
+      min-width: 32px;
+      justify-content: center;
+    }
+
+    .gamepad-bar {
+      background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border-top: 1px solid var(--border);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      position: sticky;
+      bottom: 0;
+      z-index: 40;
+      margin-top: auto;
+    }
+    .gamepad-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
     }
 
     /* Glass Header */
@@ -474,6 +537,210 @@
     }
     .empty-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
 
+    /* Connection & Heartbeat Banner */
+    .connection-banner {
+      background: linear-gradient(90deg, #dc2626, #991b1b);
+      color: #ffffff;
+      padding: 10px 20px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 500;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
+      animation: slideDown 0.3s ease;
+    }
+    .connection-banner.visible { display: flex; }
+    .connection-banner button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      color: #ffffff;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+    .connection-banner button:hover { background: rgba(255, 255, 255, 0.3); }
+
+    /* Toast Notification System */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 380px;
+      width: calc(100vw - 32px);
+      pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      background: rgba(22, 20, 32, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+      animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .toast.toast-exit { animation: toastOut 0.2s forwards; }
+    .toast-success { border-color: rgba(34, 197, 94, 0.5); }
+    .toast-error { border-color: rgba(239, 68, 68, 0.5); }
+    .toast-warning { border-color: rgba(245, 158, 11, 0.5); }
+    .toast-info { border-color: rgba(56, 189, 248, 0.5); }
+    .toast-icon { flex-shrink: 0; width: 22px; height: 22px; margin-top: 1px; }
+    .toast-content { flex: 1; min-width: 0; }
+    .toast-title { font-weight: 600; font-size: 0.88rem; margin-bottom: 2px; color: #ffffff; }
+    .toast-msg { font-size: 0.82rem; color: var(--text-muted); line-height: 1.4; word-break: break-word; }
+    .toast-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.15rem;
+      line-height: 1;
+      padding: 0 4px;
+      transition: color 0.15s;
+    }
+    .toast-close:hover { color: #ffffff; }
+    .toast-timer-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 3px;
+      background: var(--primary);
+      width: 100%;
+      opacity: 0.7;
+    }
+    @keyframes toastIn {
+      from { transform: translateY(20px) scale(0.95); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    @keyframes toastOut {
+      from { transform: translateY(0) scale(1); opacity: 1; }
+      to { transform: translateY(20px) scale(0.9); opacity: 0; }
+    }
+
+    /* Quick Access Bar */
+    .quick-access-container {
+      background: rgba(17, 16, 25, 0.5);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .quick-access-container::-webkit-scrollbar { display: none; }
+    .quick-access-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .quick-chip {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 12px;
+      font-size: 0.78rem;
+      color: var(--text);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .quick-chip:hover {
+      background: rgba(139, 92, 246, 0.15);
+      border-color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    /* Activity History Drawer */
+    .drawer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: none;
+    }
+    .activity-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 380px;
+      max-width: 90vw;
+      height: 100vh;
+      background: #151320;
+      border-left: 1px solid var(--border);
+      z-index: 201;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
+    }
+    .activity-drawer.open { transform: translateX(0); }
+    .drawer-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .activity-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      font-size: 0.8rem;
+    }
+    .activity-time {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       header { padding: 10px 16px; }
@@ -481,28 +748,52 @@
       .toolbar { padding: 12px; }
       .search-box { width: 100%; }
       th:nth-child(3), td:nth-child(3) { display: none; } /* hide date on mobile */
+      .toast-container { bottom: 16px; right: 16px; left: 16px; width: auto; }
     }
   </style>
 </head>
 <body id="dropTarget">
+  <div class="decorative-glow" aria-hidden="true"></div>
+
+  <!-- Connection Fallback & Heartbeat Banner -->
+  <div class="connection-banner" id="connectionBanner">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <img src="/assets/status/error.svg" width="18" height="18" alt="Alerta">
+      <span><strong>Comunicação Interrompida:</strong> O console R36S não respondeu. Tentando reconectar automaticamente...</span>
+    </div>
+    <button id="btnRetryConnection" type="button">Reconectar Agora</button>
+  </div>
 
   <!-- Header -->
   <header>
     <div class="brand">
-      <div class="brand-icon"><img src="/assets/branding/logo_main.svg" width="22" height="22"></div>
+      <picture class="brand-icon">
+        <source media="(max-width: 640px)" srcset="/assets/branding/logo_compact.svg">
+        <img src="/assets/branding/logo_main.svg" width="22" height="22" alt="R36S">
+      </picture>
       <span>R36S File Manager</span>
       <span class="brand-badge">dArkOS RE</span>
+      <span class="wifi-badge" id="wifiStatusBadge" title="Console R36S Online"><img src="/assets/status/wifi.svg" width="14" height="14" alt="Wi-Fi"></span>
     </div>
     <div class="header-actions">
+      <button class="btn" id="btnActivities" title="Histórico de Atividades e Notificações">
+        <img src="/assets/dialogs/info.svg" width="16" height="16" alt="">
+        <span>Atividades</span>
+        <span id="activityBadge" class="brand-badge" style="display:none;margin-left:4px;padding:1px 6px;">0</span>
+      </button>
+      <button class="btn" id="btnShowQR" title="Exibir Código de Conexão Rápida (QR Code)">
+        <img src="/assets/dialogs/qr.svg" width="16" height="16" alt="">
+        <span>QR Code</span>
+      </button>
       <button class="btn" id="btnNewFolder" title="Criar Nova Pasta">
         <img src="/assets/actions/new_folder.svg" width="16" height="16" alt="">
         <span>Nova Pasta</span>
       </button>
-      <button class="btn btn-primary" id="btnUpload" title="Enviar Arquivos">
+      <button class="btn btn-primary" id="btnUpload" title="Enviar Arquivos ou Jogos">
         <img src="/assets/actions/upload.svg" width="16" height="16" alt="">
         <span>Enviar</span>
       </button>
-      <button class="btn btn-danger" id="btnShutdown" title="Encerrar Servidor">
+      <button class="btn btn-danger" id="btnShutdown" title="Desconectar e Voltar ao Console">
         <img src="/assets/status/error.svg" width="16" height="16" alt="">
         <span>Sair</span>
       </button>
@@ -529,8 +820,21 @@
   <main>
     <!-- Toolbar & Breadcrumb -->
     <div class="toolbar">
-      <div class="breadcrumb" id="breadcrumbContainer">
-        <span class="breadcrumb-item active">/</span>
+      <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+        <div class="nav-history-buttons">
+          <button class="btn btn-icon" id="btnNavBack" title="Voltar" disabled>
+            <img src="/assets/navigation/back.svg" width="14" height="14" alt="Voltar">
+          </button>
+          <button class="btn btn-icon" id="btnNavForward" title="Avançar" disabled>
+            <img src="/assets/navigation/forward.svg" width="14" height="14" alt="Avançar">
+          </button>
+          <button class="btn btn-icon" id="btnNavRefresh" title="Atualizar">
+            <img src="/assets/navigation/refresh.svg" width="14" height="14" alt="Atualizar">
+          </button>
+        </div>
+        <div class="breadcrumb" id="breadcrumbContainer">
+          <span class="breadcrumb-item active">/</span>
+        </div>
       </div>
       <div class="toolbar-actions">
         <div class="search-box">
@@ -562,6 +866,15 @@
       </div>
     </div>
 
+    <!-- Quick Access / Emulator Shortcuts Bar -->
+    <div class="quick-access-container" id="quickAccessContainer" style="display: none;">
+      <div class="quick-access-label">
+        <img src="/assets/icons/folder_rom.svg" width="14" height="14" alt="">
+        <span>Atalhos Rápidos:</span>
+      </div>
+      <div id="quickChipsList" style="display: flex; gap: 8px; align-items: center;"></div>
+    </div>
+
     <!-- File Table -->
     <div class="file-container">
       <table>
@@ -585,6 +898,13 @@
       </table>
     </div>
   </main>
+
+  <!-- Gamepad Status Bar (Reflete mapeamento físico do console R36S) -->
+  <footer class="gamepad-bar">
+    <div class="gamepad-hint"><img src="/assets/sprites/dpad.svg" width="18" height="18" alt="D-Pad"> <span>Navegar</span></div>
+    <div class="gamepad-hint"><img src="/assets/sprites/btn_a.svg" width="18" height="18" alt="A"> <span>Abrir / Confirmar</span></div>
+    <div class="gamepad-hint"><img src="/assets/sprites/btn_b.svg" width="18" height="18" alt="B"> <span>Voltar / Cancelar</span></div>
+  </footer>
 
   <!-- Batch Floating Action Bar -->
   <div class="batch-bar" id="batchBar">
@@ -612,8 +932,12 @@
   <!-- Modal Dialog -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal-card">
-      <div class="modal-title" id="modalTitle">Título</div>
+      <div class="modal-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+        <img id="modalIcon" src="/assets/dialogs/info.svg" width="24" height="24" alt="">
+        <div class="modal-title" id="modalTitle" style="font-size: 1.1rem; font-weight: 600;">Título</div>
+      </div>
       <div class="modal-body" id="modalBodyText">Mensagem informativa...</div>
+      <div id="modalCustomContent"></div>
       <input type="text" class="modal-input" id="modalInput" style="display: none;">
       <div class="modal-buttons">
         <button class="btn" id="modalBtnCancel">Cancelar</button>
@@ -621,6 +945,33 @@
       </div>
     </div>
   </div>
+
+  <!-- Activity & Notification History Drawer -->
+  <div class="drawer-overlay" id="drawerOverlay"></div>
+  <aside class="activity-drawer" id="activityDrawer">
+    <div class="drawer-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <img src="/assets/dialogs/info.svg" width="18" height="18" alt="">
+        <strong style="font-size: 0.95rem;">Histórico de Atividades</strong>
+      </div>
+      <button class="btn btn-icon" id="btnCloseDrawer" title="Fechar">✕</button>
+    </div>
+    <div style="padding: 10px 20px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+      <button class="btn" id="btnRequestNotifPerm" style="font-size: 0.75rem; padding: 4px 10px;">
+        <img src="/assets/status/wifi.svg" width="12" height="12" alt="">
+        <span>Notificações no Navegador</span>
+      </button>
+      <button class="btn" id="btnClearHistory" style="font-size: 0.75rem; padding: 4px 10px;">Limpar</button>
+    </div>
+    <div class="drawer-body" id="activityList">
+      <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 30px 10px;">
+        Nenhuma atividade recente registrada nesta sessão.
+      </div>
+    </div>
+  </aside>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
   <!-- Hidden File Input -->
   <input type="file" id="fileInput" multiple style="display: none;">
@@ -636,6 +987,164 @@
       let selectedPaths = new Set();
       let clipboard = null; // { action: 'copy'|'move', paths: [] }
 
+      // Activity and Toast Notification Engine
+      let activityHistory = [];
+      let unreadActivities = 0;
+
+      function addActivity(text, type = 'info') {
+        const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        activityHistory.unshift({ text, type, time: timeStr });
+        if (activityHistory.length > 50) activityHistory.pop();
+        unreadActivities++;
+        updateActivityBadge();
+        renderActivityList();
+      }
+
+      function updateActivityBadge() {
+        const badge = document.getElementById('activityBadge');
+        if (!badge) return;
+        if (unreadActivities > 0) {
+          badge.style.display = 'inline-block';
+          badge.textContent = unreadActivities > 99 ? '99+' : unreadActivities.toString();
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+
+      function renderActivityList() {
+        const container = document.getElementById('activityList');
+        if (!container) return;
+        if (activityHistory.length === 0) {
+          container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 30px 10px;">Nenhuma atividade recente nesta sessão.</div>`;
+          return;
+        }
+        container.innerHTML = activityHistory.map(item => {
+          let icon = '/assets/dialogs/info.svg';
+          if (item.type === 'success') icon = '/assets/status/success.svg';
+          else if (item.type === 'error') icon = '/assets/status/error.svg';
+          else if (item.type === 'warning') icon = '/assets/status/warning.svg';
+          return `
+            <div class="activity-item">
+              <img src="${icon}" width="18" height="18" style="margin-top: 2px;" alt="">
+              <div style="flex: 1; min-width: 0;">
+                <div style="color: var(--text);">${item.text}</div>
+                <div class="activity-time">${item.time}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function showToast({ title, message, type = 'info', duration = 4500 }) {
+        addActivity(`${title}: ${message}`, type);
+        sendNativeNotification(title, message);
+
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        
+        let icon = '/assets/dialogs/info.svg';
+        if (type === 'success') icon = '/assets/status/success.svg';
+        else if (type === 'error') icon = '/assets/status/error.svg';
+        else if (type === 'warning') icon = '/assets/status/warning.svg';
+
+        toast.innerHTML = `
+          <img src="${icon}" class="toast-icon" alt="">
+          <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            <div class="toast-msg">${message}</div>
+          </div>
+          <button class="toast-close" title="Fechar">×</button>
+          ${duration > 0 ? '<div class="toast-timer-bar"></div>' : ''}
+        `;
+
+        const closeBtn = toast.querySelector('.toast-close');
+        const dismiss = () => {
+          toast.classList.add('toast-exit');
+          setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 220);
+        };
+        closeBtn.onclick = dismiss;
+
+        container.appendChild(toast);
+
+        if (duration > 0) {
+          const timerBar = toast.querySelector('.toast-timer-bar');
+          if (timerBar) {
+            timerBar.style.transition = `width ${duration}ms linear`;
+            requestAnimationFrame(() => { timerBar.style.width = '0%'; });
+          }
+          setTimeout(dismiss, duration);
+        }
+      }
+
+      // External Web Notification API with safe fallback
+      function sendNativeNotification(title, body) {
+        try {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(title, {
+              body,
+              icon: '/favicon.svg'
+            });
+          }
+        } catch (e) {}
+      }
+
+      function requestNotificationPermission() {
+        if ('Notification' in window) {
+          Notification.requestPermission().then(perm => {
+            if (perm === 'granted') {
+              showToast({ title: 'Notificações Ativadas', message: 'Você receberá avisos no dispositivo ao concluir transferências e extrações de jogos.', type: 'success' });
+            } else {
+              showToast({ title: 'Aviso', message: 'Permissão para notificações não foi autorizada pelo navegador.', type: 'warning' });
+            }
+          });
+        } else {
+          showToast({ title: 'Recurso Indisponível', message: 'Este navegador não suporta notificações nativas de sistema.', type: 'warning' });
+        }
+      }
+
+      // Connection Fallback & Heartbeat
+      let isConnected = true;
+      let heartbeatTimer = null;
+      let consecutiveFails = 0;
+
+      async function checkHeartbeat() {
+        try {
+          const res = await fetch('/api/ping', { method: 'GET', cache: 'no-cache' });
+          if (res.ok) {
+            if (!isConnected) {
+              isConnected = true;
+              document.getElementById('connectionBanner').classList.remove('visible');
+              document.getElementById('wifiStatusBadge').style.opacity = '1';
+              showToast({ title: 'Conexão Restabelecida', message: 'Comunicação com o console R36S normalizada!', type: 'success' });
+              loadDirectory(currentPath);
+            }
+            consecutiveFails = 0;
+          } else {
+            handleConnectionLost();
+          }
+        } catch (e) {
+          handleConnectionLost();
+        }
+      }
+
+      function handleConnectionLost() {
+        consecutiveFails++;
+        if (consecutiveFails >= 2 && isConnected) {
+          isConnected = false;
+          document.getElementById('connectionBanner').classList.add('visible');
+          document.getElementById('wifiStatusBadge').style.opacity = '0.35';
+          showToast({ title: 'Console Desconectado', message: 'Verifique se o console R36S continua ligado e conectado à rede Wi-Fi.', type: 'error', duration: 6000 });
+        }
+      }
+
+      function startHeartbeat() {
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        heartbeatTimer = setInterval(checkHeartbeat, 6000);
+      }
+
       // API Helper
       async function apiRequest(endpoint, method = 'GET', data = null) {
         const headers = { 'X-Auth-Token': token };
@@ -644,12 +1153,24 @@
           headers['Content-Type'] = 'application/json';
           opts.body = JSON.stringify(data);
         }
-        const resp = await fetch(endpoint, opts);
-        if (resp.status === 401) {
-          alert("Sessão expirada ou Token inválido. Recarregue a página.");
-          throw new Error("Unauthorized");
+        try {
+          const resp = await fetch(endpoint, opts);
+          if (resp.status === 401) {
+            showToast({
+              title: "Sessão Expirada",
+              message: "O token de segurança expirou. Escaneie o QR Code exibido na tela do seu R36S para reconectar.",
+              type: "error",
+              duration: 8000
+            });
+            throw new Error("Unauthorized");
+          }
+          return resp;
+        } catch (err) {
+          if (err.message !== "Unauthorized") {
+            handleConnectionLost();
+          }
+          throw err;
         }
-        return resp;
       }
 
       // Formatters
@@ -694,14 +1215,17 @@
           if (systemIcons[lower]) {
             return { icon: `<img src="/assets/systems/${systemIcons[lower]}" width="22" height="22" alt="">`, class: 'icon-folder', badge: lower.toUpperCase() };
           }
+          if (['roms', 'games', 'game', 'emulation', 'bios'].includes(lower)) {
+            return { icon: '<img src="/assets/icons/folder_rom.svg" width="20" height="20" alt="">', class: 'icon-folder', badge: 'ROMS' };
+          }
           return { icon: '<img src="/assets/icons/folder.svg" width="20" height="20" alt="">', class: 'icon-folder' };
         }
         const ext = name.split('.').pop().toLowerCase();
         if (systemIcons[ext]) {
-          return { icon: `<img src="/assets/systems/${systemIcons[ext]}" width="22" height="22" alt="">`, class: 'icon-rom', badge: systemIcons[ext].replace('.svg', '').toUpperCase() };
+          return { icon: `<img src="/assets/systems/${systemIcons[ext]}" width="22" height="22" alt="">`, class: 'icon-rom', badge: systemIcons[ext].replace('.svg', '').toUpperCase(), isRom: true };
         }
         if (romExtensions[ext]) {
-          return { icon: '<img src="/assets/icons/file_rom.svg" width="20" height="20" alt="">', class: 'icon-rom', badge: romExtensions[ext] };
+          return { icon: '<img src="/assets/icons/file_rom.svg" width="20" height="20" alt="">', class: 'icon-rom', badge: romExtensions[ext], isRom: true };
         }
         if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
           return { icon: '<img src="/assets/icons/file_zip.svg" width="20" height="20" alt="">', class: 'icon-archive', badge: ext.toUpperCase() };
@@ -738,6 +1262,47 @@
         }
       }
 
+      // Navigation History Stack
+      let historyStack = [];
+      let historyIndex = -1;
+
+      function navigateTo(path, push = true) {
+        if (push) {
+          if (historyIndex < historyStack.length - 1) {
+            historyStack = historyStack.slice(0, historyIndex + 1);
+          }
+          historyStack.push(path);
+          historyIndex = historyStack.length - 1;
+        }
+        updateNavButtons();
+        loadDirectory(path);
+      }
+
+      function updateNavButtons() {
+        const btnBack = document.getElementById('btnNavBack');
+        const btnForward = document.getElementById('btnNavForward');
+        if (btnBack) btnBack.disabled = historyIndex <= 0;
+        if (btnForward) btnForward.disabled = historyIndex >= historyStack.length - 1;
+      }
+
+      document.getElementById('btnNavBack').onclick = () => {
+        if (historyIndex > 0) {
+          historyIndex--;
+          updateNavButtons();
+          loadDirectory(historyStack[historyIndex]);
+        }
+      };
+      document.getElementById('btnNavForward').onclick = () => {
+        if (historyIndex < historyStack.length - 1) {
+          historyIndex++;
+          updateNavButtons();
+          loadDirectory(historyStack[historyIndex]);
+        }
+      };
+      document.getElementById('btnNavRefresh').onclick = () => {
+        loadDirectory(currentPath);
+      };
+
       function renderStorageBar() {
         const bar = document.getElementById('storageBar');
         bar.innerHTML = '';
@@ -754,7 +1319,7 @@
           pill.onclick = () => {
             currentPath = root.path;
             selectedPaths.clear();
-            loadDirectory(currentPath);
+            navigateTo(currentPath);
           };
           bar.appendChild(pill);
         });
@@ -789,7 +1354,7 @@
         const rootItem = document.createElement('span');
         rootItem.className = `breadcrumb-item ${parts.length === 0 ? 'active' : ''}`;
         rootItem.innerHTML = '<img src="/assets/navigation/home.svg" width="14" height="14" style="vertical-align: middle; margin-right: 4px;" alt=""> /';
-        rootItem.onclick = () => loadDirectory('/');
+        rootItem.onclick = () => navigateTo('/');
         container.appendChild(rootItem);
 
         parts.forEach((part, idx) => {
@@ -804,7 +1369,7 @@
           item.className = `breadcrumb-item ${idx === parts.length - 1 ? 'active' : ''}`;
           item.textContent = part;
           if (idx < parts.length - 1) {
-            item.onclick = () => loadDirectory(targetPath);
+            item.onclick = () => navigateTo(targetPath);
           }
           container.appendChild(item);
         });
@@ -841,7 +1406,7 @@
                 <div class="file-icon ${iconInfo.class}">${iconInfo.icon}</div>
                 <div>
                   <div style="font-weight: 500;">${file.name}</div>
-                  ${iconInfo.badge ? `<span class="rom-badge">${iconInfo.badge}</span>` : ''}
+                  ${iconInfo.badge ? `<span class="rom-badge">${iconInfo.isRom ? '<img src="/assets/ui/badge_rom.svg" width="10" height="10" style="vertical-align:middle;margin-right:3px;" alt="">' : ''}${iconInfo.badge}</span>` : ''}
                 </div>
               </div>
             </td>
@@ -849,8 +1414,9 @@
             <td class="file-meta">${formatDate(file.mtime)}</td>
             <td style="text-align: right;">
               <div class="file-actions">
-                ${!file.is_dir ? `<button class="btn" title="Baixar" onclick="event.stopPropagation(); downloadFile('${file.path}')"><img src="/assets/actions/download.svg" width="14" height="14" alt="Baixar"></button>` : ''}
-                <button class="btn" title="Renomear" onclick="event.stopPropagation(); promptRename('${file.path}', '${file.name}')"><img src="/assets/actions/rename.svg" width="14" height="14" alt="Renomear"></button>
+                ${!file.is_dir && file.name.toLowerCase().endsWith('.zip') ? `<button class="btn" title="Descompactar Jogo no Console" onclick="event.stopPropagation(); extractZipSingle('${file.path}', '${file.name.replace(/'/g, "\\'")}')"><img src="/assets/actions/zip.svg" width="14" height="14" alt="Extrair"></button>` : ''}
+                ${!file.is_dir ? `<button class="btn" title="Baixar para seu Dispositivo" onclick="event.stopPropagation(); downloadFile('${file.path}')"><img src="/assets/actions/download.svg" width="14" height="14" alt="Baixar"></button>` : ''}
+                <button class="btn" title="Renomear" onclick="event.stopPropagation(); promptRename('${file.path}', '${file.name.replace(/'/g, "\\'")}')"><img src="/assets/actions/rename.svg" width="14" height="14" alt="Renomear"></button>
                 <button class="btn btn-danger" title="Excluir" onclick="event.stopPropagation(); deleteSingle('${file.path}')"><img src="/assets/actions/delete.svg" width="14" height="14" alt="Excluir"></button>
               </div>
             </td>
@@ -868,7 +1434,7 @@
           tr.onclick = () => {
             if (file.is_dir) {
               selectedPaths.clear();
-              loadDirectory(file.path);
+              navigateTo(file.path);
             } else {
               checkbox.checked = !checkbox.checked;
               if (checkbox.checked) selectedPaths.add(file.path);
@@ -922,27 +1488,97 @@
           const resp = await apiRequest(`/api/download/ticket?path=${encodeURIComponent(path)}`);
           const data = await resp.json();
           if (data.success && data.ticket) {
+            showToast({ title: "Iniciando Download", message: `Preparando transferência de ${path.split('/').pop()}...`, type: "info", duration: 3000 });
             window.location.href = `/api/download?ticket=${data.ticket}`;
           } else {
-            alert("Erro ao gerar link de download.");
+            showToast({ title: "Erro no Download", message: "Não foi possível gerar a autorização de download.", type: "error" });
           }
         } catch (e) {
-          alert("Falha ao solicitar download.");
+          showToast({ title: "Falha de Conexão", message: "Erro ao comunicar com o console para download.", type: "error" });
         }
       };
+
+      // Extract ZIP directly on R36S console
+      window.extractZipSingle = function(archivePath, archiveName) {
+        showModal({
+          title: "Descompactar Jogo no R36S?",
+          message: `Deseja extrair os arquivos de "${archiveName}" diretamente para a pasta atual no console?`,
+          icon: "/assets/actions/zip.svg",
+          hasInput: false,
+          onConfirm: async () => {
+            showToast({ title: "Descompactação Iniciada", message: `Extraindo "${archiveName}" no console...`, type: "info", duration: 3500 });
+            try {
+              const resp = await apiRequest('/api/tasks/start', 'POST', {
+                action: 'extract',
+                archive_path: archivePath,
+                dest_dir: currentPath
+              });
+              const res = await resp.json();
+              if (res.success && res.task_id) {
+                pollExtractionTask(res.task_id, archiveName);
+              } else {
+                showToast({ title: "Erro na Descompactação", message: res.error || "Não foi possível processar o arquivo zip.", type: "error" });
+              }
+            } catch (err) {
+              showToast({ title: "Falha na Requisição", message: "Erro de comunicação ao iniciar extração.", type: "error" });
+            }
+          }
+        });
+      };
+
+      async function pollExtractionTask(taskId, archiveName) {
+        showProgressModal("Descompactando Arquivo no Console", `Extraindo arquivos de "${archiveName}"...`);
+        let attempts = 0;
+        const pollTimer = setInterval(async () => {
+          attempts++;
+          if (attempts > 120) {
+            clearInterval(pollTimer);
+            hideProgressModal();
+            showToast({ title: "Tempo Esgotado", message: "A extração demorou mais que o esperado. Verifique o console.", type: "warning" });
+            return;
+          }
+          try {
+            const resp = await apiRequest(`/api/tasks/status?id=${taskId}`);
+            const data = await resp.json();
+            if (data.success && data.task) {
+              const task = data.task;
+              updateProgressModal(task.progress_text || "Extraindo jogo no armazenamento...");
+              if (task.status === "completed") {
+                clearInterval(pollTimer);
+                hideProgressModal();
+                const count = task.result ? task.result.extracted_files : 0;
+                showToast({
+                  title: "Jogo Descompactado com Sucesso!",
+                  message: `"${archiveName}" foi extraído (${count} arquivo(s) pronto(s) para jogar).`,
+                  type: "success",
+                  duration: 6000
+                });
+                loadDirectory(currentPath);
+              } else if (task.status === "failed") {
+                clearInterval(pollTimer);
+                hideProgressModal();
+                showToast({ title: "Erro na Descompactação", message: task.error || "Falha ao extrair jogo no console.", type: "error" });
+              }
+            }
+          } catch (e) {
+            clearInterval(pollTimer);
+            hideProgressModal();
+          }
+        }, 900);
+      }
 
       // Batch ZIP Download
       document.getElementById('btnDownloadSelected').onclick = async () => {
         if (selectedPaths.size === 0) return;
         const paths = Array.from(selectedPaths);
-        showProgressModal("Compactando no R36S...", "Criando arquivo ZIP em segundo plano...");
+        showProgressModal("Preparando Download Compactado", "O R36S está agrupando os arquivos selecionados...");
 
         try {
           const resp = await apiRequest('/api/tasks/start', 'POST', { action: 'create_zip', paths });
           const json = await resp.json();
           if (!json.success) {
             hideProgressModal();
-            alert("Erro ao iniciar compactação: " + json.error);
+            showToast({ title: "Erro na Compactação", message: json.error || "Não foi possível criar o pacote.", type: "error" });
             return;
           }
 
@@ -953,17 +1589,18 @@
               const statJson = await statResp.json();
               if (statJson.success) {
                 const task = statJson.task;
-                updateProgressModal(task.progress_text || "Compactando arquivos...");
+                updateProgressModal(task.progress_text || "Compactando arquivos no console...");
                 if (task.status === "completed") {
                   clearInterval(poll);
                   hideProgressModal();
                   if (task.result && task.result.download_url) {
+                    showToast({ title: "Download Pronto", message: "O arquivo ZIP foi gerado com sucesso!", type: "success" });
                     window.location.href = task.result.download_url;
                   }
                 } else if (task.status === "failed") {
                   clearInterval(poll);
                   hideProgressModal();
-                  alert("Erro na compactação: " + (task.error || "Falha"));
+                  showToast({ title: "Falha na Compactação", message: task.error || "Erro ao gerar arquivo compactado.", type: "error" });
                 }
               }
             } catch (err) {
@@ -973,7 +1610,7 @@
           }, 1000);
         } catch (e) {
           hideProgressModal();
-          alert("Falha de conexão com o console.");
+          showToast({ title: "Falha de Conexão", message: "Erro de comunicação com o console R36S.", type: "error" });
         }
       };
 
@@ -982,18 +1619,21 @@
         if (selectedPaths.size === 0) return;
         clipboard = { action: 'copy', paths: Array.from(selectedPaths) };
         showClipboardBar();
+        showToast({ title: "Copiado", message: `${selectedPaths.size} item(ns) pronto(s) para copiar. Navegue até a pasta de destino e clique em Colar.`, type: "info", duration: 3500 });
       };
 
       document.getElementById('btnMoveSelected').onclick = () => {
         if (selectedPaths.size === 0) return;
         clipboard = { action: 'move', paths: Array.from(selectedPaths) };
         showClipboardBar();
+        showToast({ title: "Recortado", message: `${selectedPaths.size} item(ns) pronto(s) para mover. Navegue até a pasta de destino e clique em Colar.`, type: "info", duration: 3500 });
       };
 
       function showClipboardBar() {
         const bar = document.getElementById('clipboardBar');
         const text = document.getElementById('clipboardText');
-        text.textContent = `${clipboard.paths.length} item(ns) copiado(s)/movido(s) para a área de transferência.`;
+        const actionLabel = clipboard.action === 'copy' ? 'copiar' : 'mover';
+        text.textContent = `${clipboard.paths.length} item(ns) selecionado(s) para ${actionLabel}.`;
         bar.style.display = "flex";
       }
 
@@ -1005,6 +1645,8 @@
       document.getElementById('btnPaste').onclick = async () => {
         if (!clipboard) return;
         const endpoint = clipboard.action === 'copy' ? '/api/fs/copy' : '/api/fs/move';
+        const actionName = clipboard.action === 'copy' ? 'Cópia' : 'Movimentação';
+        showToast({ title: `Processando ${actionName}`, message: `Transferindo ${clipboard.paths.length} item(ns) para ${currentPath}...`, type: "info", duration: 3000 });
         try {
           const resp = await apiRequest(endpoint, 'POST', {
             sources: clipboard.paths,
@@ -1012,15 +1654,17 @@
           });
           const res = await resp.json();
           if (res.success) {
+            const count = clipboard.paths.length;
             clipboard = null;
             document.getElementById('clipboardBar').style.display = "none";
             selectedPaths.clear();
             loadDirectory(currentPath);
+            showToast({ title: `${actionName} Concluída`, message: `${count} item(ns) transferido(s) com sucesso.`, type: "success" });
           } else {
-            alert("Erro: " + (res.error || "Operação falhou"));
+            showToast({ title: `Erro na ${actionName}`, message: res.error || "Operação não pôde ser concluída.", type: "error" });
           }
         } catch (e) {
-          alert("Falha ao processar área de transferência.");
+          showToast({ title: "Falha de Conexão", message: "Não foi possível concluir a transferência.", type: "error" });
         }
       };
 
@@ -1028,15 +1672,37 @@
       const modalOverlay = document.getElementById('modalOverlay');
       const modalTitle = document.getElementById('modalTitle');
       const modalBodyText = document.getElementById('modalBodyText');
+      const modalCustomContent = document.getElementById('modalCustomContent');
+      const modalIcon = document.getElementById('modalIcon');
       const modalInput = document.getElementById('modalInput');
       const modalBtnCancel = document.getElementById('modalBtnCancel');
       const modalBtnConfirm = document.getElementById('modalBtnConfirm');
       let currentModalAction = null;
 
-      function showModal({ title, message, defaultValue, hasInput, onConfirm, isDanger = false }) {
+      function showModal({ title, message, defaultValue, hasInput, onConfirm, isDanger = false, icon = null, htmlContent = null }) {
         modalTitle.textContent = title;
         modalBodyText.textContent = message || "";
         modalBodyText.style.display = message ? "block" : "none";
+
+        if (modalCustomContent) {
+          if (htmlContent) {
+            modalCustomContent.innerHTML = htmlContent;
+            modalCustomContent.style.display = "block";
+          } else {
+            modalCustomContent.innerHTML = "";
+            modalCustomContent.style.display = "none";
+          }
+        }
+
+        if (modalIcon) {
+          if (icon) {
+            modalIcon.src = icon;
+          } else if (isDanger) {
+            modalIcon.src = '/assets/status/warning.svg';
+          } else {
+            modalIcon.src = '/assets/dialogs/info.svg';
+          }
+        }
 
         if (hasInput) {
           modalInput.style.display = "block";
@@ -1059,6 +1725,8 @@
         modalTitle.textContent = title;
         modalBodyText.textContent = text;
         modalBodyText.style.display = "block";
+        if (modalCustomContent) modalCustomContent.style.display = "none";
+        if (modalIcon) modalIcon.src = '/assets/transfer/progress.svg';
         modalInput.style.display = "none";
         modalBtnCancel.style.display = "none";
         modalBtnConfirm.style.display = "none";
@@ -1081,6 +1749,24 @@
         modalOverlay.style.display = "none";
       };
 
+      // Show QR Code Access Modal
+      document.getElementById('btnShowQR').onclick = () => {
+        const fullUrl = window.location.href;
+        showModal({
+          title: "Acesso R36S • QR Code",
+          message: "Aponte a câmera do seu smartphone para conectar diretamente à sessão web:",
+          icon: "/assets/dialogs/qr.svg",
+          htmlContent: `
+            <div style="text-align: center; margin: 16px 0;">
+              <img src="/assets/dialogs/qr.svg" width="64" height="64" style="margin-bottom: 12px; filter: drop-shadow(0 2px 8px rgba(139,92,246,0.3));" alt="QR Code">
+              <div style="font-size: 0.75rem; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; word-break: break-all; font-family: monospace; color: var(--accent); border: 1px solid var(--border);">${fullUrl}</div>
+            </div>
+          `,
+          hasInput: false,
+          onConfirm: () => {}
+        });
+      };
+
       // New Folder
       document.getElementById('btnNewFolder').onclick = () => {
         showModal({
@@ -1088,11 +1774,20 @@
           hasInput: true,
           defaultValue: "",
           onConfirm: async (val) => {
-            if (!val.trim()) return;
-            const resp = await apiRequest('/api/fs/mkdir', 'POST', { parent_path: currentPath, name: val.trim() });
-            const res = await resp.json();
-            if (res.success) loadDirectory(currentPath);
-            else alert("Erro: " + res.error);
+            const folderName = val.trim();
+            if (!folderName) return;
+            try {
+              const resp = await apiRequest('/api/fs/mkdir', 'POST', { parent_path: currentPath, name: folderName });
+              const res = await resp.json();
+              if (res.success) {
+                showToast({ title: "Pasta Criada", message: `Pasta "${folderName}" criada com sucesso.`, type: "success" });
+                loadDirectory(currentPath);
+              } else {
+                showToast({ title: "Erro ao Criar Pasta", message: res.error || "Não foi possível criar a pasta.", type: "error" });
+              }
+            } catch (e) {
+              showToast({ title: "Falha de Conexão", message: "Erro ao tentar criar pasta.", type: "error" });
+            }
           }
         });
       };
@@ -1104,27 +1799,45 @@
           hasInput: true,
           defaultValue: oldName,
           onConfirm: async (val) => {
-            if (!val.trim() || val.trim() === oldName) return;
-            const resp = await apiRequest('/api/fs/rename', 'POST', { old_path: oldPath, new_name: val.trim() });
-            const res = await resp.json();
-            if (res.success) loadDirectory(currentPath);
-            else alert("Erro: " + res.error);
+            const newName = val.trim();
+            if (!newName || newName === oldName) return;
+            try {
+              const resp = await apiRequest('/api/fs/rename', 'POST', { old_path: oldPath, new_name: newName });
+              const res = await resp.json();
+              if (res.success) {
+                showToast({ title: "Item Renomeado", message: `"${oldName}" alterado para "${newName}".`, type: "success" });
+                loadDirectory(currentPath);
+              } else {
+                showToast({ title: "Erro ao Renomear", message: res.error || "Não foi possível renomear.", type: "error" });
+              }
+            } catch (e) {
+              showToast({ title: "Falha de Conexão", message: "Erro ao tentar renomear item.", type: "error" });
+            }
           }
         });
       };
 
       // Delete Single
       window.deleteSingle = function(path) {
+        const itemName = path.split('/').pop();
         showModal({
           title: "Excluir item?",
-          message: `Deseja realmente excluir permanentemente "${path.split('/').pop()}"?`,
+          message: `Deseja realmente excluir permanentemente "${itemName}" do console?`,
           hasInput: false,
           isDanger: true,
           onConfirm: async () => {
-            const resp = await apiRequest('/api/fs/delete', 'POST', { paths: [path] });
-            const res = await resp.json();
-            if (res.success) loadDirectory(currentPath);
-            else alert("Erro ao excluir item.");
+            try {
+              const resp = await apiRequest('/api/fs/delete', 'POST', { paths: [path] });
+              const res = await resp.json();
+              if (res.success) {
+                showToast({ title: "Item Excluído", message: `"${itemName}" foi removido do armazenamento.`, type: "success" });
+                loadDirectory(currentPath);
+              } else {
+                showToast({ title: "Erro ao Excluir", message: res.error || "Não foi possível excluir o item.", type: "error" });
+              }
+            } catch (e) {
+              showToast({ title: "Falha de Conexão", message: "Erro de comunicação ao excluir.", type: "error" });
+            }
           }
         });
       };
@@ -1139,13 +1852,18 @@
           hasInput: false,
           isDanger: true,
           onConfirm: async () => {
-            const resp = await apiRequest('/api/fs/delete', 'POST', { paths: Array.from(selectedPaths) });
-            const res = await resp.json();
-            if (res.success) {
-              selectedPaths.clear();
-              loadDirectory(currentPath);
-            } else {
-              alert("Erro ao excluir alguns itens.");
+            try {
+              const resp = await apiRequest('/api/fs/delete', 'POST', { paths: Array.from(selectedPaths) });
+              const res = await resp.json();
+              if (res.success) {
+                selectedPaths.clear();
+                showToast({ title: "Itens Excluídos", message: `${count} item(ns) removido(s) com sucesso.`, type: "success" });
+                loadDirectory(currentPath);
+              } else {
+                showToast({ title: "Erro na Exclusão", message: res.error || "Falha ao excluir alguns itens.", type: "error" });
+              }
+            } catch (e) {
+              showToast({ title: "Falha de Conexão", message: "Erro ao solicitar exclusão.", type: "error" });
             }
           }
         });
@@ -1189,11 +1907,21 @@
 
       async function uploadFilesQueue(files) {
         progressPanel.style.display = "block";
+        let successCount = 0;
         for (let i = 0; i < files.length; i++) {
-          await uploadSingleFile(files[i], i + 1, files.length);
+          const ok = await uploadSingleFile(files[i], i + 1, files.length);
+          if (ok) successCount++;
         }
         fileInput.value = "";
         progressPanel.style.display = "none";
+        if (successCount > 0) {
+          showToast({
+            title: "Envio Concluído!",
+            message: `${successCount} de ${files.length} arquivo(s) transferido(s) com sucesso para o console.`,
+            type: "success",
+            duration: 5000
+          });
+        }
         loadDirectory(currentPath);
       }
 
@@ -1218,11 +1946,18 @@
           initPayload.resume_token = savedSession.resume_token;
         }
 
-        const initResp = await apiRequest('/api/upload/init', 'POST', initPayload);
-        const initData = await initResp.json();
+        let initData;
+        try {
+          const initResp = await apiRequest('/api/upload/init', 'POST', initPayload);
+          initData = await initResp.json();
+        } catch (e) {
+          showToast({ title: "Falha de Conexão", message: `Não foi possível iniciar o envio de ${file.name}.`, type: "error" });
+          return false;
+        }
+
         if (!initData.success) {
-          alert(`Erro ao iniciar upload de ${file.name}: ${initData.error}`);
-          return;
+          showToast({ title: "Erro no Envio", message: `Falha ao iniciar envio de ${file.name}: ${initData.error}`, type: "error" });
+          return false;
         }
 
         const uploadId = initData.upload_id;
@@ -1235,6 +1970,7 @@
 
         if (initData.resumed && offset > 0) {
           progressTitle.textContent = `[${index}/${total}] Retomando ${file.name} de ${formatSize(offset)}...`;
+          showToast({ title: "Retomando Envio", message: `Continuando ${file.name} de onde parou (${formatSize(offset)})...`, type: "info", duration: 3000 });
         } else {
           progressTitle.textContent = `[${index}/${total}] Enviando ${file.name}...`;
         }
@@ -1242,55 +1978,125 @@
         const startTime = Date.now();
         let bytesUploadedSinceStart = 0;
 
-        while (offset < file.size) {
-          const chunkBlob = file.slice(offset, offset + chunkSize);
-          const chunkBuffer = await chunkBlob.arrayBuffer();
+        try {
+          while (offset < file.size) {
+            const chunkBlob = file.slice(offset, offset + chunkSize);
+            const chunkBuffer = await chunkBlob.arrayBuffer();
 
-          const chunkResp = await fetch('/api/upload/chunk', {
-            method: 'POST',
-            headers: {
-              'X-Auth-Token': token,
-              'X-Resume-Token': resumeToken,
-              'X-Upload-Id': uploadId,
-              'X-Chunk-Index': chunkIndex.toString(),
-              'X-Chunk-Offset': offset.toString(),
-              'Content-Type': 'application/octet-stream'
-            },
-            body: chunkBuffer
+            const chunkResp = await fetch('/api/upload/chunk', {
+              method: 'POST',
+              headers: {
+                'X-Auth-Token': token,
+                'X-Resume-Token': resumeToken,
+                'X-Upload-Id': uploadId,
+                'X-Chunk-Index': chunkIndex.toString(),
+                'X-Chunk-Offset': offset.toString(),
+                'Content-Type': 'application/octet-stream'
+              },
+              body: chunkBuffer
+            });
+
+            if (!chunkResp.ok) {
+              const errText = await chunkResp.text();
+              throw new Error(`Falha no fragmento ${chunkIndex}: ${errText}`);
+            }
+
+            offset += chunkBuffer.byteLength;
+            bytesUploadedSinceStart += chunkBuffer.byteLength;
+            chunkIndex++;
+
+            const pct = Math.min(100, Math.round((offset / file.size) * 100));
+            progressPercent.textContent = pct + "%";
+            progressBarFill.style.width = pct + "%";
+            progressBytes.textContent = `${formatSize(offset)} / ${formatSize(file.size)}`;
+
+            const elapsedSec = (Date.now() - startTime) / 1000;
+            if (elapsedSec > 0.3) {
+              const speed = bytesUploadedSinceStart / elapsedSec;
+              progressSpeed.textContent = formatSize(speed) + "/s";
+            }
+          }
+
+          const compResp = await apiRequest('/api/upload/complete', 'POST', {
+            upload_id: uploadId,
+            resume_token: resumeToken
           });
-
-          if (!chunkResp.ok) {
-            const errText = await chunkResp.text();
-            throw new Error(`Falha no envio do fragmento ${chunkIndex}: ${errText}`);
+          const compData = await compResp.json();
+          if (!compData.success) {
+            showToast({ title: "Erro na Finalização", message: `Falha ao validar arquivo: ${compData.error}`, type: "error" });
+            return false;
+          } else {
+            localStorage.removeItem(resumeStorageKey);
+            return true;
           }
-
-          offset += chunkBuffer.byteLength;
-          bytesUploadedSinceStart += chunkBuffer.byteLength;
-          chunkIndex++;
-
-          const pct = Math.min(100, Math.round((offset / file.size) * 100));
-          progressPercent.textContent = pct + "%";
-          progressBarFill.style.width = pct + "%";
-          progressBytes.textContent = `${formatSize(offset)} / ${formatSize(file.size)}`;
-
-          const elapsedSec = (Date.now() - startTime) / 1000;
-          if (elapsedSec > 0.3) {
-            const speed = bytesUploadedSinceStart / elapsedSec;
-            progressSpeed.textContent = formatSize(speed) + "/s";
-          }
-        }
-
-        const compResp = await apiRequest('/api/upload/complete', 'POST', {
-          upload_id: uploadId,
-          resume_token: resumeToken
-        });
-        const compData = await compResp.json();
-        if (!compData.success) {
-          alert(`Erro na finalização: ${compData.error}`);
-        } else {
-          localStorage.removeItem(resumeStorageKey);
+        } catch (err) {
+          showToast({ title: "Interrupção no Envio", message: `O envio de ${file.name} foi pausado. Ele poderá ser retomado depois.`, type: "warning" });
+          return false;
         }
       }
+
+      // Quick Access to Emulators and Folders
+      async function loadQuickAccess() {
+        try {
+          const resp = await apiRequest('/api/quick-access');
+          const data = await resp.json();
+          if (data.success && data.shortcuts && data.shortcuts.length > 0) {
+            const container = document.getElementById('quickAccessContainer');
+            const list = document.getElementById('quickChipsList');
+            list.innerHTML = '';
+            data.shortcuts.forEach(sc => {
+              const chip = document.createElement('div');
+              chip.className = 'quick-chip';
+              chip.innerHTML = `<img src="${sc.icon}" width="15" height="15" alt=""> <span>${sc.name}</span>`;
+              chip.onclick = () => {
+                navigateTo(sc.path);
+                showToast({ title: "Atalho Aberto", message: `Pasta ${sc.name} carregada.`, type: "info", duration: 2000 });
+              };
+              list.appendChild(chip);
+            });
+            container.style.display = 'flex';
+          }
+        } catch (e) {
+          console.warn("Atalhos rápidos indisponíveis:", e);
+        }
+      }
+
+      // Drawer and Notification UI Handlers
+      const activityDrawer = document.getElementById('activityDrawer');
+      const drawerOverlay = document.getElementById('drawerOverlay');
+      const btnActivities = document.getElementById('btnActivities');
+      const btnCloseDrawer = document.getElementById('btnCloseDrawer');
+      const btnClearHistory = document.getElementById('btnClearHistory');
+      const btnRequestNotifPerm = document.getElementById('btnRequestNotifPerm');
+      const btnRetryConnection = document.getElementById('btnRetryConnection');
+
+      function openDrawer() {
+        unreadActivities = 0;
+        updateActivityBadge();
+        renderActivityList();
+        drawerOverlay.style.display = 'block';
+        setTimeout(() => activityDrawer.classList.add('open'), 10);
+      }
+
+      function closeDrawer() {
+        activityDrawer.classList.remove('open');
+        setTimeout(() => { drawerOverlay.style.display = 'none'; }, 280);
+      }
+
+      btnActivities.onclick = openDrawer;
+      btnCloseDrawer.onclick = closeDrawer;
+      drawerOverlay.onclick = closeDrawer;
+      btnClearHistory.onclick = () => {
+        activityHistory = [];
+        unreadActivities = 0;
+        updateActivityBadge();
+        renderActivityList();
+      };
+      btnRequestNotifPerm.onclick = requestNotificationPermission;
+      btnRetryConnection.onclick = () => {
+        showToast({ title: "Verificando...", message: "Tentando reconectar com o console R36S...", type: "info", duration: 2500 });
+        checkHeartbeat();
+      };
 
       // Drag and Drop
       ['dragenter', 'dragover'].forEach(name => {
@@ -1306,7 +2112,14 @@
       });
 
       // Initial Bootstrap
-      loadStorageRoots().then(() => loadDirectory(currentPath));
+      loadStorageRoots().then(() => {
+        historyStack = [currentPath];
+        historyIndex = 0;
+        updateNavButtons();
+        loadDirectory(currentPath);
+        loadQuickAccess();
+        startHeartbeat();
+      });
     })();
   </script>
 </body>

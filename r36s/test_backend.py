@@ -18,6 +18,7 @@ import re
 import socket
 import errno
 import hashlib
+import zipfile
 import threading
 import subprocess
 import unittest.mock
@@ -152,6 +153,25 @@ def run_audit():
                 "LOCAL", "API: Status do sistema autenticado (versão e uptime)",
                 data.get("success") is True and "version" in data and "uptime_seconds" in data
             )
+
+        # Healthcheck Ping
+        try:
+            req = urllib.request.Request(f"{base_url}/api/ping")
+            with urllib.request.urlopen(req) as resp:
+                ping_data = json.loads(resp.read().decode())
+                assert_test("LOCAL", "API: Heartbeat / Ping leve responde online (200 OK)", ping_data.get("status") == "online" and ping_data.get("success") is True)
+        except Exception as e:
+            assert_test("LOCAL", "API: Heartbeat / Ping leve responde online (200 OK)", False, str(e))
+
+        # Quick Access / Atalhos de Emuladores
+        try:
+            req = urllib.request.Request(f"{base_url}/api/quick-access")
+            req.add_header("X-Auth-Token", test_token)
+            with urllib.request.urlopen(req) as resp:
+                qa_data = json.loads(resp.read().decode())
+                assert_test("LOCAL", "API: Atalhos rápidos de emuladores respondem formato válido", qa_data.get("success") is True and isinstance(qa_data.get("shortcuts"), list))
+        except Exception as e:
+            assert_test("LOCAL", "API: Atalhos rápidos de emuladores respondem formato válido", False, str(e))
 
         # Storage roots detection
         req = urllib.request.Request(f"{base_url}/api/storage")
@@ -536,6 +556,46 @@ def run_audit():
                 except Exception as e:
                     assert_test("LOCAL", "Tarefas: Download seguro do arquivo ZIP gerado", False, str(e))
 
+        # Safe ZIP Extraction (Direct & Safe)
+        sample_zip_path = os.path.join(test_dir, "test_game.zip")
+        with zipfile.ZipFile(sample_zip_path, "w") as zf:
+            zf.writestr("game_rom.bin", b"SAMPLE_GAME_ROM_CONTENT")
+            zf.writestr("subfolder/readme.txt", b"ROM README INSTRUCTION")
+
+        extract_target_dir = os.path.join(test_dir, "extracted_game")
+        try:
+            ext_req = urllib.request.Request(f"{base_url}/api/fs/extract", method="POST")
+            ext_req.add_header("X-Auth-Token", test_token)
+            ext_req.add_header("Content-Type", "application/json")
+            ext_req.data = json.dumps({"archive_path": sample_zip_path, "dest_dir": extract_target_dir}).encode()
+            with urllib.request.urlopen(ext_req) as resp:
+                ext_res = json.loads(resp.read().decode())
+                res_obj = ext_res.get("result", {})
+                extracted_rom = os.path.join(extract_target_dir, "game_rom.bin")
+                assert_test(
+                    "LOCAL", "Filesystem: Extração segura de arquivo ZIP no console",
+                    ext_res.get("success") is True and os.path.isfile(extracted_rom) and res_obj.get("extracted_files") >= 2
+                )
+        except Exception as e:
+            assert_test("LOCAL", "Filesystem: Extração segura de arquivo ZIP no console", False, str(e))
+
+        # Zip-Slip Traversal Attack Prevention
+        malicious_zip_path = os.path.join(test_dir, "zip_slip_attack.zip")
+        with zipfile.ZipFile(malicious_zip_path, "w") as zf:
+            zf.writestr("../../evil_escape.bin", b"DANGEROUS PAYLOAD")
+
+        try:
+            bad_ext_req = urllib.request.Request(f"{base_url}/api/fs/extract", method="POST")
+            bad_ext_req.add_header("X-Auth-Token", test_token)
+            bad_ext_req.add_header("Content-Type", "application/json")
+            bad_ext_req.data = json.dumps({"archive_path": malicious_zip_path, "dest_dir": extract_target_dir}).encode()
+            urllib.request.urlopen(bad_ext_req)
+            assert_test("LOCAL", "Segurança: Bloqueio estrito de Zip-Slip Traversal", False, "Deveria ter rejeitado o arquivo")
+        except urllib.error.HTTPError as e:
+            assert_test("LOCAL", "Segurança: Bloqueio estrito de Zip-Slip Traversal", e.code in (400, 403))
+        except Exception as e:
+            assert_test("LOCAL", "Segurança: Bloqueio estrito de Zip-Slip Traversal", True)
+
         # Copy & Paste
         try:
             source_file = dest_file_path # uploaded_test.txt in test_dir
@@ -632,6 +692,171 @@ def run_audit():
                 )
         except Exception as e:
             assert_test("LOCAL", "Download Streaming: Suporte a HTTP Range (206 Partial Content)", False, str(e))
+
+        # =====================================================================
+        # DOWNLOAD RANGE & TICKET AUDIT SUITE (CASOS A a H)
+        # =====================================================================
+        def get_test_ticket(file_p=dest_file_path):
+            t_req = urllib.request.Request(f"{base_url}/api/download/ticket", method="POST")
+            t_req.add_header("X-Auth-Token", test_token)
+            t_req.add_header("Content-Type", "application/json")
+            t_req.data = json.dumps({"path": file_p}).encode()
+            with urllib.request.urlopen(t_req) as resp:
+                t_res = json.loads(resp.read().decode())
+                return t_res.get("ticket")
+
+        file_len = os.path.getsize(dest_file_path)
+
+        # Caso A: Download completo (200 OK sem Range) consome o ticket
+        try:
+            t_a = get_test_ticket()
+            req_a = urllib.request.Request(f"{base_url}/api/download-ticket?ticket={t_a}")
+            with urllib.request.urlopen(req_a) as resp_a:
+                data_a = resp_a.read()
+                status_a = resp_a.status
+                assert_test("LOCAL", "Range/Ticket Caso A: Download completo (200 OK sem Range) consome o ticket", status_a == 200 and len(data_a) == file_len)
+        except Exception as e:
+            assert_test("LOCAL", "Range/Ticket Caso A: Download completo (200 OK sem Range) consome o ticket", False, str(e))
+
+        # Caso B: Tentativa de reuso de ticket após download completo resulta em 403 Forbidden
+        try:
+            req_b = urllib.request.Request(f"{base_url}/api/download-ticket?ticket={t_a}")
+            urllib.request.urlopen(req_b)
+            assert_test("LOCAL", "Range/Ticket Caso B: Reuso de ticket após download completo rejeitado (403)", False)
+        except urllib.error.HTTPError as e:
+            assert_test("LOCAL", "Range/Ticket Caso B: Reuso de ticket após download completo rejeitado (403)", e.code == 403)
+        except Exception as e:
+            assert_test("LOCAL", "Range/Ticket Caso B: Reuso de ticket após download completo rejeitado (403)", False, str(e))
+
+        # Caso C: Range parcial inicial (bytes=0-49) retorna 206 Partial Content e Content-Range correto
+        try:
+            t_c = get_test_ticket()
+            req_c = urllib.request.Request(f"{base_url}/api/download-ticket?ticket={t_c}")
+            req_c.add_header("Range", "bytes=0-49")
+            with urllib.request.urlopen(req_c) as resp_c:
+                data_c = resp_c.read()
+                cr_c = resp_c.getheader("Content-Range")
+                assert_test(
+                    "LOCAL", "Range/Ticket Caso C: Range parcial inicial (206) retorna cabeçalho e payload corretos",
+                    resp_c.status == 206 and len(data_c) == 50 and cr_c == f"bytes 0-49/{file_len}"
+                )
+        except Exception as e:
+            assert_test("LOCAL", "Range/Ticket Caso C: Range parcial inicial (206) retorna cabeçalho e payload corretos", False, str(e))
+
+        # Caso D: Preservação do ticket após 206 Partial Content (ticket NÃO é consumido no range parcial)
+        try:
+            req_d = urllib.request.Request(f"{base_url}/api/download-ticket?ticket={t_c}")
+            req_d.add_header("Range", "bytes=50-99")
+            with urllib.request.urlopen(req_d) as resp_d:
+                data_d = resp_d.read()
+                cr_d = resp_d.getheader("Content-Range")
+                assert_test(
+                    "LOCAL", "Range/Ticket Caso D: Preservação de ticket após 206 parcial (ticket NÃO consumido)",
+                    resp_d.status == 206 and len(data_d) == 50 and cr_d == f"bytes 50-99/{file_len}"
+                )
+        except Exception as e:
+            assert_test("LOCAL", "Range/Ticket Caso D: Preservação de ticket após 206 parcial (ticket NÃO consumido)", False, str(e))
+
+        # Caso E: Reuso bem-sucedido do ticket para o segundo range consecutivo (fluxo Safari/iOS)
+        try:
+            req_e = urllib.request.Request(f"{base_url}/api/download-ticket?ticket={t_c}")
+            req_e.add_header("Range", "bytes=100-149")
+            with urllib.request.urlopen(req_e) as resp_e:
+                data_e = resp_e.read()
+                cr_e = resp_e.getheader("Content-Range")
+                assert_test(
+                    "LOCAL", "Range/Ticket Caso E: Múltiplas requisições Range com mesmo ticket (Safari/iOS)",
+                    resp_e.status == 206 and len(data_e) == 50 and cr_e == f"bytes 100-149/{file_len}"
+                )
+        except Exception as e:
+            assert_test("LOCAL", "Range/Ticket Caso E: Múltiplas requisições Range com mesmo ticket (Safari/iOS)", False, str(e))
+
+        # Caso F: Range cobrindo o arquivo inteiro via Range header (bytes=0-{file_len-1}) retorna 206 e consome ticket
+        try:
+            t_f = get_test_ticket()
+            req_f = urllib.request.Request(f"{base_url}/api/download-ticket?ticket={t_f}")
+            req_f.add_header("Range", f"bytes=0-{file_len - 1}")
+            with urllib.request.urlopen(req_f) as resp_f:
+                data_f = resp_f.read()
+                status_f = resp_f.status
+            # Ticket t_f deve ser invalidado após transferência total
+            consumed_f = False
+            try:
+                urllib.request.urlopen(f"{base_url}/api/download-ticket?ticket={t_f}")
+            except urllib.error.HTTPError as ef:
+                consumed_f = (ef.code == 403)
+            assert_test(
+                "LOCAL", "Range/Ticket Caso F: Range cobrindo arquivo inteiro consome ticket ao término",
+                status_f == 206 and len(data_f) == file_len and consumed_f
+            )
+        except Exception as e:
+            assert_test("LOCAL", "Range/Ticket Caso F: Range cobrindo arquivo inteiro consome ticket ao término", False, str(e))
+
+        # Caso G: Range fora dos limites / insatisfazível retorna HTTP 416
+        try:
+            t_g = get_test_ticket()
+            req_g = urllib.request.Request(f"{base_url}/api/download-ticket?ticket={t_g}")
+            req_g.add_header("Range", f"bytes={file_len + 1000}-{file_len + 2000}")
+            urllib.request.urlopen(req_g)
+            assert_test("LOCAL", "Range/Ticket Caso G: Range fora dos limites retorna HTTP 416", False)
+        except urllib.error.HTTPError as e:
+            cr_g = e.headers.get("Content-Range", "")
+            assert_test("LOCAL", "Range/Ticket Caso G: Range fora dos limites retorna HTTP 416", e.code == 416 and f"bytes */{file_len}" in cr_g)
+        except Exception as e:
+            assert_test("LOCAL", "Range/Ticket Caso G: Range fora dos limites retorna HTTP 416", False, str(e))
+
+        # Caso H: Ticket expirado ou inexistente rejeitado com 403 Forbidden
+        try:
+            req_h = urllib.request.Request(f"{base_url}/api/download-ticket?ticket=TICKET_INEXISTENTE_999999")
+            urllib.request.urlopen(req_h)
+            assert_test("LOCAL", "Range/Ticket Caso H: Ticket inválido ou expirado rejeitado com 403", False)
+        except urllib.error.HTTPError as e:
+            assert_test("LOCAL", "Range/Ticket Caso H: Ticket inválido ou expirado rejeitado com 403", e.code == 403)
+        except Exception as e:
+            assert_test("LOCAL", "Range/Ticket Caso H: Ticket inválido ou expirado rejeitado com 403", False, str(e))
+
+        # =====================================================================
+        # SANDBOX DINÂMICA & PATH TRAVERSAL UNIT TESTS
+        # =====================================================================
+        sys.path.insert(0, "r36s")
+        from server import FileManagerBackend
+
+        backend_inst = FileManagerBackend(allowed_roots=[test_dir], auth_token="dummy", ui_html_path="dummy")
+
+        traversal_caught = False
+        try:
+            backend_inst.validate_safe_path(f"{test_dir}/../etc/passwd")
+        except PermissionError:
+            traversal_caught = True
+        assert_test("LOCAL", "Sandbox/Traversal: Rejeição direta de '..' no caminho", traversal_caught)
+
+        encoded_traversal_caught = False
+        try:
+            backend_inst.validate_safe_path(f"{test_dir}/%2e%2e/etc/passwd")
+        except PermissionError:
+            encoded_traversal_caught = True
+        assert_test("LOCAL", "Sandbox/Traversal: Rejeição de traversal codificado em URL (%2e%2e)", encoded_traversal_caught)
+
+        etc_caught = False
+        try:
+            backend_inst.validate_safe_path("/etc/passwd")
+        except PermissionError:
+            etc_caught = True
+        assert_test("LOCAL", "Sandbox/Traversal: Rejeição de arquivo de sistema /etc/passwd", etc_caught)
+
+        root_caught = False
+        try:
+            backend_inst.validate_safe_path("/")
+        except PermissionError:
+            root_caught = True
+        assert_test("LOCAL", "Sandbox/Traversal: Rejeição de raiz de sistema ('/')", root_caught)
+
+        invalid_roots_rejected = False
+        try:
+            FileManagerBackend(allowed_roots=["/", "/etc", "."], auth_token="dummy", ui_html_path="dummy")
+        except RuntimeError:
+            invalid_roots_rejected = True
+        assert_test("LOCAL", "Sandbox/Traversal: Rejeição de inicialização com raízes de sistema proibidas", invalid_roots_rejected)
 
         # IP parser unit testing (Casos A to H)
         sys.path.insert(0, "r36s")

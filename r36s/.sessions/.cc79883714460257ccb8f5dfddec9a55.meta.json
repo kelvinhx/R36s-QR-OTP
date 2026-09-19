@@ -1,0 +1,17 @@
+{
+  "upload_id": "cc79883714460257ccb8f5dfddec9a55",
+  "resume_token": "f26cc7c94dcd6807ed08d7d33190771f476540cd0daa67ad",
+  "filename": "bad_sha_test.txt",
+  "target_dir": "/app/applet/r36s_test_sandbox",
+  "total_size": 10,
+  "received_bytes": 10,
+  "received_chunks": [
+    0
+  ],
+  "client_fingerprint": "bad_sha_test.txt:10",
+  "expected_hash": "bad_sha_256_hash_here_12345",
+  "created_at": 1789856925.2396393,
+  "last_activity": 1789856925.2418473,
+  "part_path": "/app/applet/r36s/.sessions/.cc79883714460257ccb8f5dfddec9a55.part",
+  "final_path": "/app/applet/r36s_test_sandbox/bad_sha_test.txt"
+}
