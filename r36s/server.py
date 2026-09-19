@@ -2043,9 +2043,14 @@ def encode_qr_matrix(text: str) -> list:
 
     return matrix
 
-def render_ansi_qr(text: str, center_width: int = 80) -> str:
+def render_ansi_qr(text: str, center_width: Optional[int] = None) -> str:
     """Renders QR code with at least 4 modules quiet zone as requested, centered for terminal width."""
     try:
+        if center_width is None or center_width <= 0:
+            try:
+                center_width = shutil.get_terminal_size((80, 24)).columns
+            except Exception:
+                center_width = 80
         matrix = encode_qr_matrix(text)
         size = len(matrix)
         quiet = 4  # ISO/IEC 18004 requirement: 4 modules quiet zone

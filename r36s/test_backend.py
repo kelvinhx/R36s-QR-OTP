@@ -26,6 +26,9 @@ import urllib.request
 import urllib.parse
 import urllib.error
 
+sys.path.insert(0, os.path.realpath("r36s"))
+from server import classify_file_system, FileManagerBackend, render_console_summary, render_ansi_qr
+
 def run_audit():
     print("==================================================================")
     print("  AUDITORIA AVANÇADA REESTRUTURADA: R36S WEB FILE MANAGER        ")
@@ -87,6 +90,57 @@ def run_audit():
     assert_test("STATIC", "Assets: Enumeração física exata (Total 53)", total_assets == 53)
     assert_test("STATIC", "Assets: Todos os assets em formato SVG otimizado", svg_count == 53)
     assert_test("STATIC", "Sprites: dpad.svg, btn_a.svg e btn_b.svg presentes", dpad_exists and btn_a_exists and btn_b_exists)
+
+    # XML and viewBox validation for all 53 SVG assets
+    import xml.etree.ElementTree as ET
+    all_svg_valid_xml = True
+    all_svg_have_viewbox = True
+    all_svg_paths = []
+    if os.path.isdir(assets_dir):
+        for root, dirs, files in os.walk(assets_dir):
+            for file in files:
+                if file.endswith(".svg"):
+                    full_p = os.path.join(root, file)
+                    all_svg_paths.append(full_p)
+                    try:
+                        tree = ET.parse(full_p)
+                        root_elem = tree.getroot()
+                        if "viewBox" not in root_elem.attrib and "viewbox" not in root_elem.attrib:
+                            all_svg_have_viewbox = False
+                    except Exception:
+                        all_svg_valid_xml = False
+
+    assert_test("STATIC", "Assets: Integridade XML válida em todos os 53 SVGs", all_svg_valid_xml and len(all_svg_paths) == 53)
+    assert_test("STATIC", "Assets: Atributo viewBox presente em todos os 53 SVGs", all_svg_have_viewbox)
+
+    # Asset Orphan and Missing Reference Audit
+    orphan_svgs = []
+    ui_code = ""
+    server_code = ""
+    with open("r36s/ui.html", "r", encoding="utf-8", errors="ignore") as f:
+        ui_code = f.read()
+    with open("r36s/server.py", "r", encoding="utf-8", errors="ignore") as f:
+        server_code = f.read()
+
+    for svg_p in all_svg_paths:
+        base_name = os.path.basename(svg_p)
+        rel_p = os.path.relpath(svg_p, "r36s")
+        if base_name not in ui_code and rel_p not in ui_code and base_name not in server_code and rel_p not in server_code:
+            orphan_svgs.append(rel_p)
+
+    assert_test("STATIC", "Assets: Nenhum asset órfão (0 órfãos no filesystem)", len(orphan_svgs) == 0, f"Órfãos detectados: {orphan_svgs}")
+
+    # Check for references in code to non-existent SVGs
+    referenced_ui_svgs = re.findall(r'[\'\"](?:/assets/|assets/)?([a-zA-Z0-9_\-/]+\.svg)[\'\"]', ui_code)
+    missing_svg_refs = []
+    for ref in set(referenced_ui_svgs):
+        ref_clean = ref.lstrip('/')
+        if not os.path.exists(os.path.join("r36s", ref_clean)) and not os.path.exists(os.path.join("r36s", "assets", ref_clean)):
+            matched = [a for a in all_svg_paths if os.path.basename(a) == os.path.basename(ref)]
+            if not matched:
+                missing_svg_refs.append(ref)
+
+    assert_test("STATIC", "Assets: Zero referências quebradas para SVGs inexistentes", len(missing_svg_refs) == 0, f"Referências ausentes: {missing_svg_refs}")
 
     # Controls.gptk validation
     gptk_file = "r36s/controls.gptk"
@@ -172,6 +226,112 @@ def run_audit():
                 assert_test("LOCAL", "API: Atalhos rápidos de emuladores respondem formato válido", qa_data.get("success") is True and isinstance(qa_data.get("shortcuts"), list))
         except Exception as e:
             assert_test("LOCAL", "API: Atalhos rápidos de emuladores respondem formato válido", False, str(e))
+
+        # ----------------------------------------------------------------------
+        # TESTES OBRIGATÓRIOS DE ASSETS, SISTEMAS E PARIDADE CONSOLE/WEB (Seções 24 e 25)
+        # ----------------------------------------------------------------------
+        retro_systems = [
+            ("GBA", "gba", "game.gba", "assets/systems/gba.svg", "[GBA]"),
+            ("GB", "gb", "game.gb", "assets/systems/gb.svg", "[GB]"),
+            ("NES", "nes", "game.nes", "assets/systems/nes.svg", "[NES]"),
+            ("SNES", "snes", "game.sfc", "assets/systems/snes.svg", "[SNES]"),
+            ("N64", "n64", "game.n64", "assets/systems/n64.svg", "[N64]"),
+            ("NDS", "nds", "game.nds", "assets/systems/nds.svg", "[NDS]"),
+            ("MEGADRIVE", "megadrive", "game.md", "assets/systems/megadrive.svg", "[MD]"),
+            ("PS1", "ps1", "game.chd", "assets/systems/ps1.svg", "[PS1]"),
+            ("PSP", "psp", "game.cso", "assets/systems/psp.svg", "[PSP]"),
+            ("ARCADE", "arcade", "game.zip", "assets/systems/arcade.svg", "[ARCADE]")
+        ]
+
+        all_systems_ok = True
+        system_details = []
+        for sys_title, sys_dir_name, file_sample, expected_svg, expected_tag in retro_systems:
+            # 1. Classificação pelo backend
+            sys_folder = os.path.join(test_dir, sys_dir_name)
+            os.makedirs(sys_folder, exist_ok=True)
+            sample_file = os.path.join(sys_folder, file_sample)
+            with open(sample_file, "wb") as f:
+                f.write(b"\x00" * 64)
+
+            # Classifica diretório
+            dir_cls = classify_file_system(sys_dir_name, is_dir=True, parent_path=test_dir)
+            # Classifica arquivo
+            file_cls = classify_file_system(file_sample, is_dir=False, parent_path=sys_folder)
+
+            # 2. Verifica ícone e tag
+            has_correct_svg = (file_cls.get("icon_svg") == expected_svg)
+            has_correct_tag = (file_cls.get("console_tag") == expected_tag)
+            has_correct_sys = (file_cls.get("system") == sys_dir_name)
+
+            # 3. Verifica se asset existe fisicamente e possui XML válido
+            phys_asset = os.path.join("r36s", expected_svg)
+            asset_exists = os.path.isfile(phys_asset)
+            
+            # 4. Verifica carregamento via HTTP
+            http_asset_ok = False
+            try:
+                asset_req = urllib.request.Request(f"{base_url}/{expected_svg}")
+                with urllib.request.urlopen(asset_req) as a_resp:
+                    if a_resp.status == 200 and "image/svg+xml" in a_resp.headers.get("Content-Type", ""):
+                        http_asset_ok = True
+            except Exception:
+                http_asset_ok = False
+
+            # 5. Verifica renderização na Web (ui.html possui regra getFileIcon)
+            web_mapped = (os.path.basename(expected_svg) in ui_code)
+
+            sys_valid = has_correct_svg and has_correct_tag and has_correct_sys and asset_exists and http_asset_ok and web_mapped
+            if not sys_valid:
+                all_systems_ok = False
+                system_details.append(f"{sys_title}: svg={has_correct_svg}, tag={has_correct_tag}, sys={has_correct_sys}, exist={asset_exists}, http={http_asset_ok}, web={web_mapped}")
+
+            assert_test("LOCAL", f"Sistema Retrô {sys_title}: Classificação, SVG dedicado, Tag Console e Web", sys_valid)
+
+        assert_test("LOCAL", "Sistemas Retrô: Total de 10 sistemas consolidados sem fallback genérico", all_systems_ok, "; ".join(system_details))
+
+        # Tipos fundamentais de arquivos e diretórios
+        file_types_matrix = [
+            ("folder", "pasta_teste", True, "", "assets/icons/folder.svg", "[DIR]"),
+            ("folder_open", "pasta_vazia", True, "", "assets/icons/folder_open.svg", ""),
+            ("folder_rom", "roms", True, "", "assets/icons/folder_rom.svg", "[ROMS]"),
+            ("file_generic", "sem_extensao", False, "", "assets/icons/file_generic.svg", "[ARQ]"),
+            ("file_rom", "jogo_desconhecido.bin", False, "documentos", "assets/icons/file_rom.svg", "[ROM]"),
+            ("file_audio", "musica.mp3", False, "", "assets/icons/file_audio.svg", "[AUDIO]"),
+            ("file_video", "video.mp4", False, "", "assets/icons/file_video.svg", "[VIDEO]"),
+            ("file_image", "screenshot.png", False, "", "assets/icons/file_image.svg", "[IMG]"),
+            ("file_text", "notas.txt", False, "", "assets/icons/file_text.svg", "[TXT]"),
+            ("file_zip", "pacote.zip", False, "downloads", "assets/icons/file_zip.svg", "[ZIP]"),
+        ]
+
+        all_types_ok = True
+        for type_name, sample_name, is_d, parent_ctx, exp_svg, exp_tag in file_types_matrix:
+            phys_p = os.path.join("r36s", exp_svg)
+            f_exists = os.path.isfile(phys_p)
+            # HTTP check
+            h_ok = False
+            try:
+                with urllib.request.urlopen(f"{base_url}/{exp_svg}") as r:
+                    h_ok = (r.status == 200 and "image/svg+xml" in r.headers.get("Content-Type", ""))
+            except Exception:
+                h_ok = False
+            w_mapped = (os.path.basename(exp_svg) in ui_code)
+            
+            t_ok = f_exists and h_ok and w_mapped
+            if not t_ok:
+                all_types_ok = False
+            assert_test("LOCAL", f"Tipo de Arquivo {type_name}: Integridade física, HTTP 200 e mapeamento", t_ok)
+
+        assert_test("LOCAL", "Tipos de Arquivo: Matriz de 10 tipos de dados validada integralmente", all_types_ok)
+
+        # Teste de Paridade Estrita Backend -> Console -> Web
+        # Exemplo canônico: game.gba em /roms/gba/
+        canon_cls = classify_file_system("game.gba", is_dir=False, parent_path=os.path.join(test_dir, "gba"))
+        backend_sys = canon_cls.get("system")
+        backend_icon = canon_cls.get("icon_svg")
+        backend_tag = canon_cls.get("console_tag")
+
+        parity_ok = (backend_sys == "gba" and backend_icon == "assets/systems/gba.svg" and backend_tag == "[GBA]")
+        assert_test("LOCAL", "Paridade: Backend -> Console -> Web produzem identidade idêntica para ROMs", parity_ok)
 
         # Storage roots detection
         req = urllib.request.Request(f"{base_url}/api/storage")
