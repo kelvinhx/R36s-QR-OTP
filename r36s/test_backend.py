@@ -145,12 +145,23 @@ def run_audit():
     # Controls.gptk validation
     gptk_file = "r36s/controls.gptk"
     gptk_ok = False
+    missing_gptk = []
     if os.path.isfile(gptk_file):
         with open(gptk_file, "r") as f:
             content = f.read()
-            if "back = esc" in content and "start = enter" in content and "a = enter" in content and "b = esc" in content:
+            expected_mappings = [
+                "back = esc", "select = esc", "start = enter", "a = enter", "b = esc",
+                "x = r", "y = space", "up = up", "down = down", "left = left", "right = right",
+                "left_analog_up = up", "left_analog_down = down", "left_analog_left = left",
+                "left_analog_right = right", "l1 = pageup", "r1 = pagedown", "l2 = home",
+                "r2 = end", "deadzone = 4000"
+            ]
+            for m in expected_mappings:
+                if m not in content:
+                    missing_gptk.append(m)
+            if not missing_gptk:
                 gptk_ok = True
-    assert_test("STATIC", "Controles: Coerência com gptokeyb e mapeamento documentado", gptk_ok)
+    assert_test("STATIC", "Controles: Coerência com gptokeyb e todos os 20 mapeamentos físicos", gptk_ok, f"Mapeamentos ausentes: {missing_gptk}")
 
     # Verify no external forbidden libraries are imported in server.py
     forbidden_libs_ok = True

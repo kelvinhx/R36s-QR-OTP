@@ -52,10 +52,16 @@ def build_standalone():
         try:
             with zipfile.ZipFile(tmp_zip_name, "w", zipfile.ZIP_DEFLATED) as zf:
                 for root, dirs, files in os.walk(assets_dir):
-                    for file in files:
+                    dirs.sort()
+                    for file in sorted(files):
                         full_path = os.path.join(root, file)
                         rel_path = os.path.relpath(full_path, assets_dir)
-                        zf.write(full_path, rel_path)
+                        arcname = rel_path.replace(os.sep, "/")
+                        zinfo = zipfile.ZipInfo(arcname, date_time=(2026, 1, 1, 0, 0, 0))
+                        zinfo.compress_type = zipfile.ZIP_DEFLATED
+                        zinfo.external_attr = 0o644 << 16
+                        with open(full_path, "rb") as f_in:
+                            zf.writestr(zinfo, f_in.read())
             with open(tmp_zip_name, "rb") as f:
                 assets_bytes = f.read()
                 assets_b64 = base64.b64encode(assets_bytes).decode("ascii")
