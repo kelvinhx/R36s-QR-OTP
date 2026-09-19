@@ -1,5 +1,6 @@
-# gptokeyb mapping for R36S Web File Manager Console
+# gptokeyb mapping for R36S Web File Manager Console (dArkOS RE)
 back = esc
+select = esc
 start = enter
 a = enter
 b = esc
@@ -13,3 +14,9 @@ left_analog_up = up
 left_analog_down = down
 left_analog_left = left
 left_analog_right = right
+l1 = pageup
+r1 = pagedown
+l2 = home
+r2 = end
+deadzone = 4000
+

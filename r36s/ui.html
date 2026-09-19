@@ -1209,39 +1209,91 @@
         'arcade': 'arcade.svg', 'mame': 'arcade.svg', 'fba': 'arcade.svg'
       };
 
-      function getFileIcon(name, isDir) {
+      function getFileIcon(name, isDir, parentPath = '') {
+        const parentName = (parentPath || '').split('/').filter(Boolean).pop() || '';
+        const lowerParent = parentName.toLowerCase();
+
         if (isDir) {
           const lower = name.toLowerCase();
-          if (systemIcons[lower]) {
-            return { icon: `<img src="/assets/systems/${systemIcons[lower]}" width="22" height="22" alt="">`, class: 'icon-folder', badge: lower.toUpperCase() };
+          const sysMap = {
+            'gba': 'gba.svg', 'gb': 'gb.svg', 'gbc': 'gb.svg',
+            'snes': 'snes.svg', 'sfc': 'snes.svg',
+            'nes': 'nes.svg', 'fc': 'nes.svg', 'famicom': 'nes.svg',
+            'n64': 'n64.svg', 'z64': 'n64.svg', 'v64': 'n64.svg',
+            'nds': 'nds.svg',
+            'ps1': 'ps1.svg', 'psx': 'ps1.svg', 'ps': 'ps1.svg',
+            'psp': 'psp.svg',
+            'megadrive': 'megadrive.svg', 'genesis': 'megadrive.svg', 'md': 'megadrive.svg',
+            'arcade': 'arcade.svg', 'mame': 'arcade.svg', 'fbneo': 'arcade.svg', 'fba': 'arcade.svg', 'neogeo': 'arcade.svg'
+          };
+          if (sysMap[lower]) {
+            return { icon: `<img src="/assets/systems/${sysMap[lower]}" width="22" height="22" alt="">`, class: 'icon-folder', badge: lower.toUpperCase() };
           }
-          if (['roms', 'games', 'game', 'emulation', 'bios'].includes(lower)) {
+          if (['roms', 'games', 'game', 'emulation', 'bios', 'roms2'].includes(lower)) {
             return { icon: '<img src="/assets/icons/folder_rom.svg" width="20" height="20" alt="">', class: 'icon-folder', badge: 'ROMS' };
           }
           return { icon: '<img src="/assets/icons/folder.svg" width="20" height="20" alt="">', class: 'icon-folder' };
         }
-        const ext = name.split('.').pop().toLowerCase();
-        if (systemIcons[ext]) {
-          return { icon: `<img src="/assets/systems/${systemIcons[ext]}" width="22" height="22" alt="">`, class: 'icon-rom', badge: systemIcons[ext].replace('.svg', '').toUpperCase(), isRom: true };
+
+        const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+
+        // Detecção contextual por sistema
+        if (ext === 'gba') {
+          return { icon: '<img src="/assets/systems/gba.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'GBA', isRom: true };
         }
-        if (romExtensions[ext]) {
-          return { icon: '<img src="/assets/icons/file_rom.svg" width="20" height="20" alt="">', class: 'icon-rom', badge: romExtensions[ext], isRom: true };
+        if (['nes', 'fc', 'fds', 'unf'].includes(ext)) {
+          return { icon: '<img src="/assets/systems/nes.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'NES', isRom: true };
         }
-        if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+        if (['sfc', 'smc', 'fig'].includes(ext)) {
+          return { icon: '<img src="/assets/systems/snes.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'SNES', isRom: true };
+        }
+        if (['gb', 'gbc'].includes(ext)) {
+          return { icon: '<img src="/assets/systems/gb.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: ext.toUpperCase(), isRom: true };
+        }
+        if (['n64', 'z64', 'v64'].includes(ext)) {
+          return { icon: '<img src="/assets/systems/n64.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'N64', isRom: true };
+        }
+        if (ext === 'nds') {
+          return { icon: '<img src="/assets/systems/nds.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'NDS', isRom: true };
+        }
+        if (['gen', 'md', 'smd'].includes(ext) || (ext === 'bin' && ['megadrive', 'genesis', 'md'].includes(lowerParent))) {
+          return { icon: '<img src="/assets/systems/megadrive.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'MD', isRom: true };
+        }
+        if ((['chd', 'pbp'].includes(ext) && ['ps1', 'psx', 'playstation'].includes(lowerParent)) ||
+            (['bin', 'cue', 'img'].includes(ext) && ['ps1', 'psx', 'playstation'].includes(lowerParent))) {
+          return { icon: '<img src="/assets/systems/ps1.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'PS1', isRom: true };
+        }
+        if (ext === 'cso' || (['iso', 'pbp'].includes(ext) && ['psp', 'iso'].includes(lowerParent))) {
+          return { icon: '<img src="/assets/systems/psp.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'PSP', isRom: true };
+        }
+        if (['zip', '7z'].includes(ext) && ['arcade', 'mame', 'fbneo', 'fba', 'neogeo'].includes(lowerParent)) {
+          return { icon: '<img src="/assets/systems/arcade.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'ARCADE', isRom: true };
+        }
+
+        // ROM Genérica
+        if (['iso', 'bin', 'cue', 'img', 'rom', '3ds', 'cia', 'wbfs', 'gcm', 'cdi', 'chd', 'pbp'].includes(ext)) {
+          return { icon: '<img src="/assets/icons/file_rom.svg" width="20" height="20" alt="">', class: 'icon-rom', badge: 'ROM', isRom: true };
+        }
+
+        // Compactados / ZIP
+        if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'].includes(ext)) {
           return { icon: '<img src="/assets/icons/file_zip.svg" width="20" height="20" alt="">', class: 'icon-archive', badge: ext.toUpperCase() };
         }
-        if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+
+        // Mídia & Documentos
+        if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext)) {
           return { icon: '<img src="/assets/icons/file_image.svg" width="20" height="20" alt="">', class: 'icon-image' };
         }
-        if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) {
+        if (['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'wma', 'opus'].includes(ext)) {
           return { icon: '<img src="/assets/icons/file_audio.svg" width="20" height="20" alt="">', class: 'icon-audio' };
         }
-        if (['mp4', 'mkv', 'avi', 'webm'].includes(ext)) {
+        if (['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv', 'flv'].includes(ext)) {
           return { icon: '<img src="/assets/icons/file_video.svg" width="20" height="20" alt="">', class: 'icon-video' };
         }
-        if (['txt', 'log', 'cfg', 'ini', 'gptk'].includes(ext)) {
+        if (['txt', 'log', 'cfg', 'ini', 'gptk', 'json', 'xml', 'md', 'sh', 'py'].includes(ext)) {
           return { icon: '<img src="/assets/icons/file_text.svg" width="20" height="20" alt="">', class: 'icon-text' };
         }
+
         return { icon: '<img src="/assets/icons/file_generic.svg" width="20" height="20" alt="">', class: 'icon-file' };
       }
 
@@ -1335,7 +1387,7 @@
           const resp = await apiRequest(`/api/fs/list?path=${encodeURIComponent(path)}`);
           const data = await resp.json();
           if (data.success) {
-            currentFiles = data.items || [];
+            currentFiles = (data.data && data.data.entries) || data.items || data.entries || [];
             renderFiles(currentFiles);
           } else {
             alert("Erro ao ler diretório: " + (data.error || "Desconhecido"));
@@ -1397,7 +1449,12 @@
           tr.className = 'file-row';
           if (selectedPaths.has(file.path)) tr.classList.add('selected');
 
-          const iconInfo = getFileIcon(file.name, file.is_dir);
+          const iconInfo = (file.classification && file.classification.icon_svg) ? {
+            icon: `<img src="/${file.classification.icon_svg}" width="22" height="22" alt="">`,
+            class: (file.classification.category === 'system' || file.classification.is_rom) ? 'icon-rom' : (file.is_dir ? 'icon-folder' : 'icon-file'),
+            badge: file.classification.badge,
+            isRom: file.classification.is_rom
+          } : getFileIcon(file.name, file.is_dir, currentPath);
 
           tr.innerHTML = `
             <td><input type="checkbox" class="file-checkbox" ${selectedPaths.has(file.path) ? 'checked' : ''}></td>

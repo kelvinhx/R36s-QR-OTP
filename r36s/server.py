@@ -26,6 +26,148 @@ DEFAULT_SESSION_TTL_SECONDS = 7200     # 2 hours
 DOWNLOAD_TICKET_TTL_SECONDS = 300      # 5 minutes
 SYSTEM_FORBIDDEN_ROOTS = {"/", "/etc", "/proc", "/sys", "/dev", "/boot", "/root", "/bin", "/sbin", "/lib", "/lib64", "/usr", "/var"}
 
+def classify_file_system(name: str, is_dir: bool, parent_path: str = "") -> Dict[str, Any]:
+    """
+    Camada central unificada de classificação de arquivos, diretórios e sistemas de emulação.
+    Garante sincronia semântica de ícones e categorização entre as interfaces Console (TTY) e Web (SPA).
+    """
+    parent_name = os.path.basename(parent_path.rstrip("/\\")).lower() if parent_path else ""
+
+    if is_dir:
+        name_lower = name.lower()
+        # Sistemas / Emuladores dedicados
+        system_dir_map = {
+            "gba": ("assets/systems/gba.svg", "GBA", "[GBA]", "Game Boy Advance"),
+            "gb": ("assets/systems/gb.svg", "GB", "[GB]", "Game Boy"),
+            "gbc": ("assets/systems/gb.svg", "GBC", "[GBC]", "Game Boy Color"),
+            "snes": ("assets/systems/snes.svg", "SNES", "[SNES]", "Super Nintendo"),
+            "sfc": ("assets/systems/snes.svg", "SFC", "[SFC]", "Super Famicom"),
+            "nes": ("assets/systems/nes.svg", "NES", "[NES]", "Nintendo (NES)"),
+            "fc": ("assets/systems/nes.svg", "FC", "[FC]", "Famicom"),
+            "famicom": ("assets/systems/nes.svg", "NES", "[NES]", "Famicom"),
+            "n64": ("assets/systems/n64.svg", "N64", "[N64]", "Nintendo 64"),
+            "nds": ("assets/systems/nds.svg", "NDS", "[NDS]", "Nintendo DS"),
+            "ps1": ("assets/systems/ps1.svg", "PS1", "[PS1]", "PlayStation 1"),
+            "psx": ("assets/systems/ps1.svg", "PSX", "[PSX]", "PlayStation (PSX)"),
+            "ps": ("assets/systems/ps1.svg", "PS1", "[PS1]", "PlayStation"),
+            "psp": ("assets/systems/psp.svg", "PSP", "[PSP]", "PlayStation Portable"),
+            "megadrive": ("assets/systems/megadrive.svg", "MD", "[MD]", "Mega Drive"),
+            "genesis": ("assets/systems/megadrive.svg", "GENESIS", "[GENESIS]", "Sega Genesis"),
+            "md": ("assets/systems/megadrive.svg", "MD", "[MD]", "Mega Drive"),
+            "arcade": ("assets/systems/arcade.svg", "ARCADE", "[ARCADE]", "Arcade"),
+            "mame": ("assets/systems/arcade.svg", "MAME", "[MAME]", "MAME Arcade"),
+            "fbneo": ("assets/systems/arcade.svg", "FBNEO", "[FBNEO]", "FinalBurn Neo"),
+            "fba": ("assets/systems/arcade.svg", "FBA", "[FBA]", "FinalBurn Alpha"),
+            "neogeo": ("assets/systems/arcade.svg", "NEOGEO", "[NEOGEO]", "Neo Geo")
+        }
+        if name_lower in system_dir_map:
+            svg, badge, tag, sys_name = system_dir_map[name_lower]
+            return {
+                "category": "system",
+                "system": name_lower,
+                "system_name": sys_name,
+                "icon_svg": svg,
+                "badge": badge,
+                "console_tag": tag,
+                "is_system": True,
+                "is_rom": False
+            }
+
+        # Pastas de ROMs / Jogos
+        if name_lower in ("roms", "games", "game", "emulation", "bios", "roms2"):
+            return {
+                "category": "folder_rom",
+                "system": None,
+                "system_name": None,
+                "icon_svg": "assets/icons/folder_rom.svg",
+                "badge": "ROMS",
+                "console_tag": "[ROMS]",
+                "is_system": False,
+                "is_rom": False
+            }
+
+        # Pasta padrão
+        return {
+            "category": "folder",
+            "system": None,
+            "system_name": None,
+            "icon_svg": "assets/icons/folder.svg",
+            "badge": "DIR",
+            "console_tag": "[DIR]",
+            "is_system": False,
+            "is_rom": False
+        }
+
+    # Arquivos (is_file)
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+
+    # GBA
+    if ext == "gba":
+        return {"category": "system", "system": "gba", "system_name": "Game Boy Advance", "icon_svg": "assets/systems/gba.svg", "badge": "GBA", "console_tag": "[GBA]", "is_system": True, "is_rom": True}
+
+    # NES
+    if ext in ("nes", "fc", "fds", "unf"):
+        return {"category": "system", "system": "nes", "system_name": "Nintendo (NES)", "icon_svg": "assets/systems/nes.svg", "badge": "NES", "console_tag": "[NES]", "is_system": True, "is_rom": True}
+
+    # SNES
+    if ext in ("sfc", "smc", "fig"):
+        return {"category": "system", "system": "snes", "system_name": "Super Nintendo", "icon_svg": "assets/systems/snes.svg", "badge": "SNES", "console_tag": "[SNES]", "is_system": True, "is_rom": True}
+
+    # Game Boy / Game Boy Color
+    if ext in ("gb", "gbc"):
+        return {"category": "system", "system": "gb", "system_name": "Game Boy", "icon_svg": "assets/systems/gb.svg", "badge": ext.upper(), "console_tag": f"[{ext.upper()}]", "is_system": True, "is_rom": True}
+
+    # Nintendo 64
+    if ext in ("n64", "z64", "v64"):
+        return {"category": "system", "system": "n64", "system_name": "Nintendo 64", "icon_svg": "assets/systems/n64.svg", "badge": "N64", "console_tag": "[N64]", "is_system": True, "is_rom": True}
+
+    # Nintendo DS
+    if ext == "nds":
+        return {"category": "system", "system": "nds", "system_name": "Nintendo DS", "icon_svg": "assets/systems/nds.svg", "badge": "NDS", "console_tag": "[NDS]", "is_system": True, "is_rom": True}
+
+    # Mega Drive
+    if ext in ("gen", "md", "smd") or (ext == "bin" and parent_name in ("megadrive", "genesis", "md")):
+        return {"category": "system", "system": "megadrive", "system_name": "Mega Drive", "icon_svg": "assets/systems/megadrive.svg", "badge": "MD", "console_tag": "[MD]", "is_system": True, "is_rom": True}
+
+    # PlayStation 1
+    if (ext in ("chd", "pbp") and parent_name in ("ps1", "psx", "playstation")) or (ext in ("bin", "cue", "img") and parent_name in ("ps1", "psx", "playstation")):
+        return {"category": "system", "system": "ps1", "system_name": "PlayStation 1", "icon_svg": "assets/systems/ps1.svg", "badge": "PS1", "console_tag": "[PS1]", "is_system": True, "is_rom": True}
+
+    # PSP
+    if ext == "cso" or (ext in ("iso", "pbp") and parent_name in ("psp", "iso")):
+        return {"category": "system", "system": "psp", "system_name": "PlayStation Portable", "icon_svg": "assets/systems/psp.svg", "badge": "PSP", "console_tag": "[PSP]", "is_system": True, "is_rom": True}
+
+    # Arcade
+    if ext in ("zip", "7z") and parent_name in ("arcade", "mame", "fbneo", "fba", "neogeo"):
+        return {"category": "system", "system": "arcade", "system_name": "Arcade", "icon_svg": "assets/systems/arcade.svg", "badge": "ARCADE", "console_tag": "[ARCADE]", "is_system": True, "is_rom": True}
+
+    # ROM genérica
+    if ext in ("iso", "bin", "cue", "img", "rom", "3ds", "cia", "wbfs", "gcm", "cdi", "chd", "pbp"):
+        return {"category": "rom", "system": None, "system_name": None, "icon_svg": "assets/icons/file_rom.svg", "badge": "ROM", "console_tag": "[ROM]", "is_system": False, "is_rom": True}
+
+    # Arquivos compactados
+    if ext in ("zip", "7z", "tar", "gz", "bz2", "xz", "rar"):
+        return {"category": "archive", "system": None, "system_name": None, "icon_svg": "assets/icons/file_zip.svg", "badge": ext.upper(), "console_tag": "[ZIP]", "is_system": False, "is_rom": False}
+
+    # Áudio
+    if ext in ("mp3", "wav", "flac", "ogg", "m4a", "aac", "wma", "opus", "mid"):
+        return {"category": "audio", "system": None, "system_name": None, "icon_svg": "assets/icons/file_audio.svg", "badge": ext.upper(), "console_tag": "[AUDIO]", "is_system": False, "is_rom": False}
+
+    # Imagens
+    if ext in ("png", "jpg", "jpeg", "webp", "bmp", "gif", "svg", "ico"):
+        return {"category": "image", "system": None, "system_name": None, "icon_svg": "assets/icons/file_image.svg", "badge": ext.upper(), "console_tag": "[IMG]", "is_system": False, "is_rom": False}
+
+    # Vídeos
+    if ext in ("mp4", "mkv", "avi", "webm", "mov", "wmv", "flv", "m4v"):
+        return {"category": "video", "system": None, "system_name": None, "icon_svg": "assets/icons/file_video.svg", "badge": ext.upper(), "console_tag": "[VIDEO]", "is_system": False, "is_rom": False}
+
+    # Textos / Documentos
+    if ext in ("txt", "log", "json", "xml", "ini", "cfg", "gptk", "md", "sh", "py", "yaml", "yml"):
+        return {"category": "text", "system": None, "system_name": None, "icon_svg": "assets/icons/file_text.svg", "badge": "TXT", "console_tag": "[TXT]", "is_system": False, "is_rom": False}
+
+    # Arquivo Genérico
+    return {"category": "generic", "system": None, "system_name": None, "icon_svg": "assets/icons/file_generic.svg", "badge": ext.upper() if ext else "FILE", "console_tag": "[ARQ]", "is_system": False, "is_rom": False}
+
 class UploadSession:
     """
     Manages chunked, resumable, and disk-persisted upload sessions.
@@ -644,6 +786,8 @@ class FileManagerBackend:
                     if entry.name.startswith(".") and (entry.name.endswith(".part") or entry.name.endswith(".meta.json")):
                         continue
 
+                    classification = classify_file_system(entry.name, is_dir, safe_path)
+
                     entries.append({
                         "name": entry.name,
                         "path": entry.path,
@@ -651,7 +795,12 @@ class FileManagerBackend:
                         "is_file": is_file,
                         "is_symlink": is_symlink,
                         "size": size,
-                        "mtime": mtime
+                        "mtime": mtime,
+                        "icon": classification["icon_svg"],
+                        "badge": classification["badge"],
+                        "console_tag": classification["console_tag"],
+                        "system": classification.get("system"),
+                        "classification": classification
                     })
         except PermissionError:
             raise PermissionError(f"Permissão negada ao ler o diretório")
@@ -671,6 +820,7 @@ class FileManagerBackend:
             "current_path": safe_path,
             "parent_path": parent if can_go_up else None,
             "entries": entries,
+            "items": entries,
             "total_items": len(entries)
         }
 
@@ -955,11 +1105,25 @@ class FileManagerBackend:
                                     "id": entry_lower,
                                     "name": display_title,
                                     "path": entry_path,
-                                    "icon": f"/assets/systems/{icon_name}"
+                                    "icon": f"/assets/systems/{icon_name}",
+                                    "icon_svg": f"assets/systems/{icon_name}",
+                                    "console_tag": f"[{icon_name.replace('.svg', '').upper()}]"
                                 })
                             break
 
         return shortcuts
+
+
+def render_console_summary(shortcuts: List[Dict[str, str]]) -> str:
+    """Gera texto formatado para exibição das pastas de emulação no console/dialog."""
+    if not shortcuts:
+        return "Nenhum diretório padrão de emulador encontrado em /roms."
+    lines = ["Sistemas de Emulação Detectados:", "----------------------------------------"]
+    for s in shortcuts:
+        tag = s.get("console_tag", f"[{s.get('id', '').upper()}]")
+        lines.append(f"{tag:<10} {s['name']:<24} -> {s['path']}")
+    return "\n".join(lines)
+
 
 
 def make_request_handler(backend: FileManagerBackend):
@@ -1344,7 +1508,12 @@ def make_request_handler(backend: FileManagerBackend):
                 target_dir = query.get("path", [backend.allowed_roots[0]])[0]
                 try:
                     data = backend.list_directory(target_dir)
-                    self.send_json(200, {"success": True, "data": data})
+                    self.send_json(200, {
+                        "success": True,
+                        "data": data,
+                        "items": data["entries"],
+                        "entries": data["entries"]
+                    })
                 except Exception as e:
                     self.send_error_json(400, str(e))
                 return

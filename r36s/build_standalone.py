@@ -412,14 +412,15 @@ if command -v dialog >/dev/null 2>&1; then
         CHOICE=$(dialog --backtitle "R36S Web File Manager (dArkOS RE)" \
             --title "PAINEL DE CONTROLE" \
             --cancel-label "Sair" \
-            --menu "Servidor ativo em:\n$CONNECT_URL\n\nEscolha uma opcao:" 15 65 4 \
+            --menu "Servidor ativo em:\n$CONNECT_URL\n\nEscolha uma opcao:" 16 68 5 \
             1 "Mostrar QR Code (Conectar)" \
-            2 "Status de Rede e Armazenamento" \
-            3 "Visualizar Logs do Servidor" \
-            4 "Desligar e Retornar ao EmulationStation" \
+            2 "Sistemas de Emuladores & Pastas de ROMs" \
+            3 "Status de Rede e Armazenamento" \
+            4 "Visualizar Logs do Servidor" \
+            5 "Desligar e Retornar ao EmulationStation" \
             3>&1 1>&2 2>&3 || echo "EXIT")
 
-        if [[ "$CHOICE" == "EXIT" ]] || [[ "$CHOICE" == "4" ]]; then
+        if [[ "$CHOICE" == "EXIT" ]] || [[ "$CHOICE" == "5" ]]; then
             if dialog --title "Sair" --yesno "Deseja realmente parar o servidor web e retornar ao EmulationStation?" 8 50; then
                 break
             fi
@@ -436,13 +437,23 @@ print(render_ansi_qr('$CONNECT_URL'))
             echo "  [ Pressione qualquer tecla ou Botao B para voltar ]"
             read -n 1 -s -r
         elif [[ "$CHOICE" == "2" ]]; then
+            SYSTEMS_MSG=$("$PYTHON_BIN" -c "
+import sys
+sys.path.insert(0, '$APP_DIR')
+from server import FileManagerBackend, render_console_summary
+b = FileManagerBackend('$APP_DIR', ['${{STORAGE_ROOTS[0]}}'])
+print(render_console_summary(b.get_quick_shortcuts()))
+")
+            dialog --title "Sistemas de Emuladores no R36S" \
+                --msgbox "$SYSTEMS_MSG" 18 68
+        elif [[ "$CHOICE" == "3" ]]; then
             ROOTS_STR=""
             for r in "${{STORAGE_ROOTS[@]}}"; do
                 ROOTS_STR="$ROOTS_STR  - $r\n"
             done
             dialog --title "Rede e Armazenamento" \
                 --msgbox "IP Local: $LOCAL_IP\nPorta: $PORT\nToken: $AUTH_TOKEN\n\nDiretorios de Armazenamento:\n$ROOTS_STR" 15 60
-        elif [[ "$CHOICE" == "3" ]]; then
+        elif [[ "$CHOICE" == "4" ]]; then
             dialog --title "Logs do Servidor (server.log)" \
                 --textbox "$APP_DIR/server.log" 20 70
         fi
