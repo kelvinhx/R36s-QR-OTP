@@ -130,7 +130,7 @@ def classify_file_system(name: str, is_dir: bool, parent_path: str = "") -> Dict
         return {"category": "system", "system": "megadrive", "system_name": "Mega Drive", "icon_svg": "assets/systems/megadrive.svg", "badge": "MD", "console_tag": "[MD]", "is_system": True, "is_rom": True}
 
     # PlayStation 1
-    if (ext in ("chd", "pbp") and parent_name in ("ps1", "psx", "playstation")) or (ext in ("bin", "cue", "img") and parent_name in ("ps1", "psx", "playstation")):
+    if (ext in ("chd", "pbp", "iso") and parent_name in ("ps1", "psx", "playstation")) or (ext in ("bin", "cue", "img") and parent_name in ("ps1", "psx", "playstation")):
         return {"category": "system", "system": "ps1", "system_name": "PlayStation 1", "icon_svg": "assets/systems/ps1.svg", "badge": "PS1", "console_tag": "[PS1]", "is_system": True, "is_rom": True}
 
     # PSP

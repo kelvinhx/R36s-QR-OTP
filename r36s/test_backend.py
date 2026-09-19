@@ -289,6 +289,36 @@ def run_audit():
 
         assert_test("LOCAL", "Sistemas Retrô: Total de 10 sistemas consolidados sem fallback genérico", all_systems_ok, "; ".join(system_details))
 
+        # Verificação exaustiva dos 17 casos específicos da Seção 3 do prompt
+        section3_cases = [
+            ("Pokemon.gba", False, os.path.join(test_dir, "gba"), "gba", "system", "[GBA]", "assets/systems/gba.svg"),
+            ("Mario.gb", False, os.path.join(test_dir, "gb"), "gb", "system", "[GB]", "assets/systems/gb.svg"),
+            ("game.gbc", False, os.path.join(test_dir, "gbc"), "gb", "system", "[GBC]", "assets/systems/gb.svg"),
+            ("game.nes", False, os.path.join(test_dir, "nes"), "nes", "system", "[NES]", "assets/systems/nes.svg"),
+            ("game.sfc", False, os.path.join(test_dir, "snes"), "snes", "system", "[SNES]", "assets/systems/snes.svg"),
+            ("game.smc", False, os.path.join(test_dir, "snes"), "snes", "system", "[SNES]", "assets/systems/snes.svg"),
+            ("game.n64", False, os.path.join(test_dir, "n64"), "n64", "system", "[N64]", "assets/systems/n64.svg"),
+            ("game.z64", False, os.path.join(test_dir, "n64"), "n64", "system", "[N64]", "assets/systems/n64.svg"),
+            ("game.nds", False, os.path.join(test_dir, "nds"), "nds", "system", "[NDS]", "assets/systems/nds.svg"),
+            ("game.gen", False, os.path.join(test_dir, "megadrive"), "megadrive", "system", "[MD]", "assets/systems/megadrive.svg"),
+            ("game.md", False, os.path.join(test_dir, "megadrive"), "megadrive", "system", "[MD]", "assets/systems/megadrive.svg"),
+            ("game.smd", False, os.path.join(test_dir, "megadrive"), "megadrive", "system", "[MD]", "assets/systems/megadrive.svg"),
+            ("game.chd", False, os.path.join(test_dir, "ps1"), "ps1", "system", "[PS1]", "assets/systems/ps1.svg"),
+            ("game.cue", False, os.path.join(test_dir, "ps1"), "ps1", "system", "[PS1]", "assets/systems/ps1.svg"),
+            ("game.iso", False, os.path.join(test_dir, "ps1"), "ps1", "system", "[PS1]", "assets/systems/ps1.svg"),
+            ("game.cso", False, os.path.join(test_dir, "psp"), "psp", "system", "[PSP]", "assets/systems/psp.svg"),
+            ("rom.zip", False, os.path.join(test_dir, "arcade"), "arcade", "system", "[ARCADE]", "assets/systems/arcade.svg"),
+        ]
+
+        sec3_all_ok = True
+        sec3_failures = []
+        for name, is_d, parent_p, exp_sys, exp_cat, exp_tag, exp_ico in section3_cases:
+            cls = classify_file_system(name, is_dir=is_d, parent_path=parent_p)
+            if not (cls.get("system") == exp_sys and cls.get("category") == exp_cat and cls.get("console_tag") == exp_tag and cls.get("icon_svg") == exp_ico):
+                sec3_all_ok = False
+                sec3_failures.append(f"{name}: sys={cls.get('system')} cat={cls.get('category')} tag={cls.get('console_tag')}")
+        assert_test("LOCAL", "Sistemas Retrô: Validação exaustiva dos 17 casos específicos da Seção 3", sec3_all_ok, "; ".join(sec3_failures))
+
         # Tipos fundamentais de arquivos e diretórios
         file_types_matrix = [
             ("folder", "pasta_teste", True, "", "assets/icons/folder.svg", "[DIR]"),
@@ -322,6 +352,42 @@ def run_audit():
             assert_test("LOCAL", f"Tipo de Arquivo {type_name}: Integridade física, HTTP 200 e mapeamento", t_ok)
 
         assert_test("LOCAL", "Tipos de Arquivo: Matriz de 10 tipos de dados validada integralmente", all_types_ok)
+
+        # Verificação exaustiva dos 24 casos específicos da Seção 5 do prompt
+        section5_cases = [
+            ("pasta normal", True, test_dir, "folder", "[DIR]", "assets/icons/folder.svg"),
+            ("pasta vazia", True, test_dir, "folder", "[DIR]", "assets/icons/folder.svg"),
+            ("roms", True, test_dir, "folder_rom", "[ROMS]", "assets/icons/folder_rom.svg"),
+            ("musica.mp3", False, test_dir, "audio", "[AUDIO]", "assets/icons/file_audio.svg"),
+            ("som.wav", False, test_dir, "audio", "[AUDIO]", "assets/icons/file_audio.svg"),
+            ("audio.flac", False, test_dir, "audio", "[AUDIO]", "assets/icons/file_audio.svg"),
+            ("video.mp4", False, test_dir, "video", "[VIDEO]", "assets/icons/file_video.svg"),
+            ("filme.mkv", False, test_dir, "video", "[VIDEO]", "assets/icons/file_video.svg"),
+            ("foto.png", False, test_dir, "image", "[IMG]", "assets/icons/file_image.svg"),
+            ("imagem.jpg", False, test_dir, "image", "[IMG]", "assets/icons/file_image.svg"),
+            ("imagem.webp", False, test_dir, "image", "[IMG]", "assets/icons/file_image.svg"),
+            ("documento.txt", False, test_dir, "text", "[TXT]", "assets/icons/file_text.svg"),
+            ("registro.log", False, test_dir, "text", "[TXT]", "assets/icons/file_text.svg"),
+            ("dados.json", False, test_dir, "text", "[TXT]", "assets/icons/file_text.svg"),
+            ("config.xml", False, test_dir, "text", "[TXT]", "assets/icons/file_text.svg"),
+            ("settings.cfg", False, test_dir, "text", "[TXT]", "assets/icons/file_text.svg"),
+            ("mapping.gptk", False, test_dir, "text", "[TXT]", "assets/icons/file_text.svg"),
+            ("script.sh", False, test_dir, "text", "[TXT]", "assets/icons/file_text.svg"),
+            ("pacote.zip", False, test_dir, "archive", "[ZIP]", "assets/icons/file_zip.svg"),
+            ("pacote.7z", False, test_dir, "archive", "[ZIP]", "assets/icons/file_zip.svg"),
+            ("pacote.tar", False, test_dir, "archive", "[ZIP]", "assets/icons/file_zip.svg"),
+            ("pacote.gz", False, test_dir, "archive", "[ZIP]", "assets/icons/file_zip.svg"),
+            ("sem_extensao", False, test_dir, "generic", "[ARQ]", "assets/icons/file_generic.svg"),
+            ("desconhecido.xyz123", False, test_dir, "generic", "[ARQ]", "assets/icons/file_generic.svg"),
+        ]
+        sec5_all_ok = True
+        sec5_failures = []
+        for name, is_d, parent_p, exp_cat, exp_tag, exp_ico in section5_cases:
+            cls = classify_file_system(name, is_dir=is_d, parent_path=parent_p)
+            if not (cls.get("category") == exp_cat and cls.get("console_tag") == exp_tag and cls.get("icon_svg") == exp_ico):
+                sec5_all_ok = False
+                sec5_failures.append(f"{name}: cat={cls.get('category')} tag={cls.get('console_tag')} icon={cls.get('icon_svg')}")
+        assert_test("LOCAL", "Tipos de Arquivo: Validação exaustiva dos 24 casos específicos da Seção 5", sec5_all_ok, "; ".join(sec5_failures))
 
         # Teste de Paridade Estrita Backend -> Console -> Web
         # Exemplo canônico: game.gba em /roms/gba/
@@ -1423,6 +1489,26 @@ def run_audit():
                 http_responding = False
 
         assert_test("STANDALONE", "Standalone: Servidor inicia e passa no health check HTTP", http_responding)
+
+        # Check assets extraction and HTTP serving in standalone environment
+        ext_assets_dir = os.path.join(extracted_tool_dir, "assets")
+        assets_extracted_ok = False
+        if os.path.isdir(ext_assets_dir):
+            svg_extracted_count = sum(1 for _, _, fs in os.walk(ext_assets_dir) for f in fs if f.endswith(".svg"))
+            if svg_extracted_count == 53:
+                assets_extracted_ok = True
+        assert_test("STANDALONE", "Standalone: Extração autônoma dos 53 assets SVG confirmada", assets_extracted_ok)
+
+        standalone_serves_asset = False
+        if standalone_port:
+            try:
+                a_req = urllib.request.Request(f"http://127.0.0.1:{standalone_port}/assets/systems/gba.svg")
+                with urllib.request.urlopen(a_req, timeout=1.0) as a_resp:
+                    if a_resp.status == 200 and "image/svg+xml" in a_resp.headers.get("Content-Type", ""):
+                        standalone_serves_asset = True
+            except Exception:
+                standalone_serves_asset = False
+        assert_test("STANDALONE", "Standalone: Servidor responde HTTP 200 para assets (/assets/systems/gba.svg)", standalone_serves_asset)
 
         # Check QR code generation in standalone environment
         qr_gen_ok = False

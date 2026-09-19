@@ -1259,7 +1259,7 @@
         if (['gen', 'md', 'smd'].includes(ext) || (ext === 'bin' && ['megadrive', 'genesis', 'md'].includes(lowerParent))) {
           return { icon: '<img src="/assets/systems/megadrive.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'MD', isRom: true };
         }
-        if ((['chd', 'pbp'].includes(ext) && ['ps1', 'psx', 'playstation'].includes(lowerParent)) ||
+        if ((['chd', 'pbp', 'iso'].includes(ext) && ['ps1', 'psx', 'playstation'].includes(lowerParent)) ||
             (['bin', 'cue', 'img'].includes(ext) && ['ps1', 'psx', 'playstation'].includes(lowerParent))) {
           return { icon: '<img src="/assets/systems/ps1.svg" width="22" height="22" alt="">', class: 'icon-rom', badge: 'PS1', isRom: true };
         }
